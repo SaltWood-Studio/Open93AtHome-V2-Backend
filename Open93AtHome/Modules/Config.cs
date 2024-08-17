@@ -23,9 +23,12 @@ namespace Open93AtHome.Modules
         public ushort HttpsPort { get; set; } = ushort.MaxValue;
 
         [YamlMember(Description = "HTTPS 证书，cert")]
-        public string? CertificateFile { get; set; } = "/path/to/cert/cert.pem";
+        public string CertificateFile { get; set; } = "/path/to/cert/cert.pem";
 
         [YamlMember(Description = "HTTPS 证书，key")]
-        public string? CertificateKeyFile { get; set; } = "/path/to/cert/key.pem";
+        public string CertificateKeyFile { get; set; } = "/path/to/cert/key.pem";
+
+        [YamlMember(Description = "文件路径")]
+        public string FileDirectory { get; set; } = "/path/to/files";
     }
 }

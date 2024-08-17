@@ -24,6 +24,7 @@ namespace Open93AtHome.Modules
         protected SocketIOClient.SocketIO _io;
         protected WebApplication _application;
         protected List<ClusterEntity> clusters;
+        protected MultiKeyDictionary<string, string, FileEntity> files;
 
         private IEnumerable<Token> tokens => _db.GetEntities<Token>();
 
@@ -41,6 +42,8 @@ namespace Open93AtHome.Modules
             {
                 file.Write(Encoding.UTF8.GetBytes(Utils.RandomHexString(128)));
             }
+
+            this.files = new MultiKeyDictionary<string, string, FileEntity>();
 
             X509Certificate2? cert = LoadAndConvertCert(config.CertificateFile, config.CertificateKeyFile);
             WebApplicationBuilder builder = WebApplication.CreateBuilder();
@@ -142,7 +145,7 @@ namespace Open93AtHome.Modules
                 }
             });
 
-            _application.MapPost("/openbmclapi-agent/configuration", async context =>
+            _application.MapGet("/openbmclapi-agent/configuration", async context =>
             {
                 if (!Utils.CheckClusterRequest(context)) return;
                 context.Response.StatusCode = 200;
@@ -154,6 +157,22 @@ namespace Open93AtHome.Modules
                         concurrency = 12
                     }
                 });
+            });
+
+            _application.MapGet("/openbmclapi/download/{hash}", async (HttpContext context, string hash) =>
+            {
+                if (!Utils.CheckClusterRequest(context)) return;
+                string? path = this.files.GetByKey1(hash)?.Path;
+                if (path != null)
+                {
+                    string realPath = Path.Combine(config.FileDirectory, '.' + path);
+                    await context.Response.SendFileAsync(realPath);
+                }
+            });
+
+            _application.MapGet("/files/{file}", async (HttpContent context, string file) =>
+            {
+
             });
         }
 
