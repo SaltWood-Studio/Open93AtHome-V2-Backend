@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using Open93AtHome.Modules;
+using YamlDotNet.Serialization;
 
 namespace Open93AtHome
 {
@@ -12,9 +13,12 @@ namespace Open93AtHome
             Config config;
             if (File.Exists(configPath))
             {
-                config = JsonConvert.DeserializeObject<Config>(File.ReadAllText(configPath)) ?? new Config();
+                Deserializer deserializer = new Deserializer();
+                config = (deserializer.Deserialize(File.ReadAllText(configPath)) as Config) ?? new Config();
             }
             else config = new Config();
+            Serializer serializer = new Serializer();
+            File.WriteAllText(configPath, serializer.Serialize(config));
 
             BackendServer server = new BackendServer(config);
         }

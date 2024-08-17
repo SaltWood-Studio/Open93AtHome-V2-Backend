@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Open93AtHome.Modules.Request;
 using Newtonsoft.Json;
 using Microsoft.IdentityModel.JsonWebTokens;
+using System.Diagnostics;
 
 namespace Open93AtHome.Modules
 {
@@ -175,9 +176,57 @@ namespace Open93AtHome.Modules
                 }
             });
 
-            _application.MapGet("/files/{file}", async (HttpContent context, string file) =>
+            _application.MapGet("/files/{file}", async (HttpContext context, string file) =>
             {
+                file = file.StartsWith('/') ? '/' + file : file;
+                string realPath = Path.Combine(config.FileDirectory, '.' +  file);
+                await context.Response.SendFileAsync(realPath);
+            });
 
+            _application.MapGet("/93AtHome/update_files", async context =>
+            {
+                if (!await Utils.CheckPermission(context, false, tokens)) return;
+                this.fileUpdateTask = Task.Run(() =>
+                {
+                    Process process = new Process()
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            WorkingDirectory = config.FileDirectory,
+                            FileName = "git",
+                            Arguments = "pull"
+                        }
+                    };
+                    process.Start();
+                    process.WaitForExit(60000);
+                    if (process.ExitCode != 0) return;
+                    var files = Utils.ScanFiles(config.FileDirectory);
+                    HashSet<FileEntity> oldFileList = this.files.GetAllValues().ToHashSet();
+                    HashSet<FileEntity> updateFileList = new HashSet<FileEntity>();
+                    HashSet<FileEntity> newFiles = new HashSet<FileEntity>();
+                    foreach (string file in files)
+                    {
+                        string realPath = Path.Combine(config.FileDirectory, '.' + file);
+                        FileInfo info = new FileInfo(realPath);
+                        using Stream stream = File.OpenRead(realPath);
+                        FileEntity entity = new FileEntity(stream, info, file);
+                        updateFileList.Add(entity);
+                    }
+                    foreach (var file in updateFileList)
+                    {
+                        if (!oldFileList.Any(f => f == file))
+                        {
+                            newFiles.Add(file);
+                        }
+                    }
+                    this._db.RemoveAll<FileEntity>();
+                    this.files = new MultiKeyDictionary<string, string, FileEntity>();
+                    foreach (var file in updateFileList)
+                    {
+                        this._db.AddEntity(file);
+                        this.files.Add(file.Hash, file.Path, file);
+                    }
+                });
             });
         }
 

@@ -81,4 +81,8 @@ public class MultiKeyDictionary<TKey1, TKey2, TValue> where TKey1 : notnull wher
             _key1Dictionary.Remove(key1);
         }
     }
+
+    public IEnumerable<TKey1> GetAllKeys1() => this._key1Dictionary.Keys;
+    public IEnumerable<TKey2> GetAllKeys2() => this._key2Dictionary.Keys;
+    public IEnumerable<TValue> GetAllValues() => this._key1Dictionary.Values;
 }
