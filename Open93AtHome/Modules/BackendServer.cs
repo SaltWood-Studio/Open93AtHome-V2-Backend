@@ -34,16 +34,21 @@ namespace Open93AtHome.Modules
 
             this._db.CreateTable<Token>();
             this._db.CreateTable<ClusterEntity>();
+            this._db.CreateTable<FileEntity>();
 
             this.clusters = this._db.GetEntities<ClusterEntity>().ToList();
+            this.files = new MultiKeyDictionary<string, string, FileEntity>();
+
+            foreach (var file in this._db.GetEntities<FileEntity>())
+            {
+                this.files.Add(file.Hash, file.Path, file);
+            }
 
             this._io = new SocketIOClient.SocketIO(config.SocketIOAddress);
             using (Stream file = File.Create(config.SocketIOHandshakeFile))
             {
                 file.Write(Encoding.UTF8.GetBytes(Utils.RandomHexString(128)));
             }
-
-            this.files = new MultiKeyDictionary<string, string, FileEntity>();
 
             X509Certificate2? cert = LoadAndConvertCert(config.CertificateFile, config.CertificateKeyFile);
             WebApplicationBuilder builder = WebApplication.CreateBuilder();
