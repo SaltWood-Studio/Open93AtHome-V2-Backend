@@ -402,7 +402,7 @@ namespace Open93AtHome.Modules
             }
             X509Certificate2 cert = X509Certificate2.CreateFromPemFile(certPath, keyPath);
             byte[] pfxCert = cert.Export(X509ContentType.Pfx);
-            using (var file = File.Create("certificate/cert.pfx"))
+            using (var file = File.Create("./cert.pfx"))
             {
                 file.Write(pfxCert);
             }
