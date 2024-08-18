@@ -416,6 +416,8 @@ namespace Open93AtHome.Modules
             Console.WriteLine($"{context.Request.Method} {context.Request.Path.Value} {context.Request.Protocol} <{context.Response.StatusCode}> - [{context.Connection.RemoteIpAddress}] {value.FirstOrDefault()}");
         }
 
+        public void Start() => _application.Run();
+
         public static (long startByte, long endByte) GetRange(string rangeHeader, long fileSize)
         {
             if (rangeHeader.Length <= 6) return (0, fileSize);

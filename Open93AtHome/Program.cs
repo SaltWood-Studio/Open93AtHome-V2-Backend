@@ -21,6 +21,7 @@ namespace Open93AtHome
             File.WriteAllText(configPath, serializer.Serialize(config));
 
             BackendServer server = new BackendServer(config);
+            server.Start();
         }
     }
 }
