@@ -2,10 +2,16 @@
 using Microsoft.Extensions.Primitives;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Open93AtHome.Modules;
+using Open93AtHome.Modules.Database;
 using Open93AtHome.Modules.Request;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.Linq;
+using System.Net.Mail;
+using System.Net;
+using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -46,6 +52,72 @@ namespace Open93AtHome
             return result;
         }
 
+        public static bool IsEmailReachable(string emailAddress)
+        {
+            try
+            {
+                // 解析电子邮件地址
+                var email = new MailAddress(emailAddress);
+                string domain = email.Host;
+
+                // 查询 MX 记录
+                var mxRecords = GetMxRecords(domain);
+
+                // 如果 MX 记录不为空，则邮件地址可达
+                return mxRecords.Length > 0;
+            }
+            catch (FormatException)
+            {
+                // 邮件地址格式不正确
+                return false;
+            }
+            catch (Exception ex)
+            {
+                // 处理其他异常
+                Console.WriteLine($"Error: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static string[] GetMxRecords(string domain)
+        {
+            try
+            {
+                var mxRecords = new List<string>();
+
+                // 查询 MX 记录
+                var dns = new DnsEndPoint(domain, 0);
+                var addresses = Dns.GetHostEntry(domain).AddressList;
+
+                foreach (var address in addresses)
+                {
+                    mxRecords.Add(address.ToString());
+                }
+
+                return mxRecords.ToArray();
+            }
+            catch (Exception ex)
+            {
+                // 处理 DNS 查询异常
+                Console.WriteLine($"DNS Error: {ex.Message}");
+                return Array.Empty<string>();
+            }
+        }
+
+        public static async ValueTask<UserEntity?> CheckCookies(HttpContext context, IEnumerable<UserEntity> users)
+        {
+            string requestToken = context.Request.Cookies["token"] ?? "";
+            string? email = JwtHelper.Instance.ValidateToken(requestToken, "93@Home-Cemter-Server", "user")?
+                .Claims.Where(claim => claim.ValueType == JwtRegisteredClaimNames.Email).FirstOrDefault()?.Value;
+            UserEntity? user = users.Where(u => u.UserEmail == email).FirstOrDefault();
+            if (user == null)
+            {
+                context.Response.StatusCode = 401;
+                await context.Response.WriteAsync("UNAUTHORIZED.");
+            }
+            return user;
+        }
+
         public static int ToInteger(this uint value)
         {
             // 将 uint 值分成高位和低位
@@ -54,6 +126,74 @@ namespace Open93AtHome
 
             // 组合成一个 int 值
             return (highPart == 0 ? 1 : -1) * lowPart; // 将高位和低位组合
+        }
+
+        public static T Random<T>(this IEnumerable<T> values)
+        {
+            Random rnd = new Random();
+            T[] elements = values.ToArray();
+            return elements[rnd.Next(0, values.Count() - 1)];
+        }
+
+        public static string GenerateSign(string path, ClusterEntity cluster)
+        {
+            long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 5 * 60 * 1000;
+            string e = Convert.ToString(timestamp, 36);
+            byte[] data = Encoding.UTF8.GetBytes($"{cluster.ClusterSecret}{path}{e}");
+            byte[] signBytes = SHA1.HashData(data);
+            string sign = ToUrlSafeBase64String(signBytes);
+            return $"s={sign}&e={e}";
+        }
+
+        public static string GetDownloadUrl(ClusterEntity cluster, FileEntity file)
+        {
+            UriBuilder uriBuilder = new UriBuilder();
+            uriBuilder.Scheme = "http";
+            uriBuilder.Host = cluster.Endpoint;
+            uriBuilder.Port = cluster.Port;
+            uriBuilder.Path = $"/download/{file.Hash}";
+            uriBuilder.Query = $"?{GenerateSign(file.Hash, cluster)}";
+            return uriBuilder.ToString();
+        }
+
+            private static string ToUrlSafeBase64String(byte[] data)
+        {
+            string base64 = Convert.ToBase64String(data);
+            return base64.Replace('+', '-').Replace('/', '_').Replace("=", string.Empty);
+        }
+
+        public static string GenerateHexString(int length)
+        {
+            const string hex = "0123456789abcdef";
+            Random random = new Random();
+
+            if (length < 0)
+            {
+                throw new ArgumentException("Length must be a positive integer");
+            }
+
+            StringBuilder hexString = new StringBuilder(length);
+
+            for (int i = 0; i < length; i++)
+            {
+                int index = random.Next(hex.Length);
+                hexString.Append(hex[index]);
+            }
+
+            return hexString.ToString();
+        }
+
+        public static ulong ByteArrayToUInt64(byte[] blob)
+        {
+            ulong result = 0;
+
+            for (int j = 0; j < 8; j++)
+            {
+                result *= 256;
+                result += blob[j];
+            }
+
+            return result;
         }
 
         /// <summary>

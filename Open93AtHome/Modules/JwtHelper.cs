@@ -37,15 +37,13 @@ public class JwtHelper
         _securityKey = new RsaSecurityKey(_rsa);
     }
 
-    public string GenerateToken(string userName, string issuer, string audience, int expiration)
+    public string GenerateToken(string username, string issuer, string audience, int expiration) => GenerateToken(issuer, audience, [
+        new Claim(JwtRegisteredClaimNames.UniqueName, username)
+    ], expiration);
+
+    public string GenerateToken(string issuer, string audience, Claim[] claims, int expiration)
     {
         var credentials = new SigningCredentials(_securityKey, SecurityAlgorithms.RsaSha256);
-
-        var claims = new[]
-        {
-            new Claim(JwtRegisteredClaimNames.UniqueName, userName),
-            // Add additional claims if needed
-        };
 
         var tokenDescriptor = new SecurityTokenDescriptor
         {

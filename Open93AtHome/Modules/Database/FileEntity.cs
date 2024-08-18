@@ -23,6 +23,8 @@ namespace Open93AtHome.Modules.Database
         [Column("mtime")]
         public long LastModified { get; set; } = -1L;
 
+        public FileEntity() { }
+
         public FileEntity(Stream file, FileInfo info, string path)
         {
             using var _ = file;

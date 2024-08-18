@@ -16,6 +16,8 @@ using Open93AtHome.Modules.Request;
 using Newtonsoft.Json;
 using Microsoft.IdentityModel.JsonWebTokens;
 using System.Diagnostics;
+using Open93AtHome.Modules.Avro;
+using System.Security.Claims;
 
 namespace Open93AtHome.Modules
 {
@@ -25,9 +27,41 @@ namespace Open93AtHome.Modules
         protected SocketIOClient.SocketIO _io;
         protected WebApplication _application;
         protected List<ClusterEntity> clusters;
-        protected MultiKeyDictionary<string, string, FileEntity> files;
+        private MultiKeyDictionary<string, string, FileEntity> files;
+        private Task? fileUpdateTask;
+        private byte[] avroBytes;
 
-        private IEnumerable<Token> tokens => _db.GetEntities<Token>();
+        private IEnumerable<Token> Tokens => _db.GetEntities<Token>();
+        private IEnumerable<ClusterEntity> OnlineClusters => this.clusters.Where(c => c.IsOnline);
+        private IEnumerable<UserEntity> Users => this._db.GetEntities<UserEntity>();
+
+        protected MultiKeyDictionary<string, string, FileEntity> Files
+        {
+            get => files;
+            set
+            {
+                this.files = value;
+                this.avroBytes = this.GenerateAvroFileList();
+            }
+        }
+
+        protected byte[] GenerateAvroFileList()
+        {
+            lock (this.avroBytes)
+            {
+                AvroEncoder encoder = new AvroEncoder();
+                encoder.SetElements(this.Files.Values.Count());
+                foreach (var file in this.Files.Values)
+                {
+                    encoder.SetString(file.Path);
+                    encoder.SetString(file.Hash);
+                    encoder.SetLong(file.Size);
+                    encoder.SetLong(file.LastModified);
+                }
+                encoder.SetEnd();
+                return encoder.ByteStream.ToArray();
+            }
+        }
 
         public BackendServer(Config config)
         {
@@ -36,6 +70,7 @@ namespace Open93AtHome.Modules
             this._db.CreateTable<Token>();
             this._db.CreateTable<ClusterEntity>();
             this._db.CreateTable<FileEntity>();
+            this._db.CreateTable<UserEntity>();
 
             this.clusters = this._db.GetEntities<ClusterEntity>().ToList();
             this.files = new MultiKeyDictionary<string, string, FileEntity>();
@@ -44,6 +79,8 @@ namespace Open93AtHome.Modules
             {
                 this.files.Add(file.Hash, file.Path, file);
             }
+
+            this.avroBytes = this.GenerateAvroFileList();
 
             this._io = new SocketIOClient.SocketIO(config.SocketIOAddress);
             using (Stream file = File.Create(config.SocketIOHandshakeFile))
@@ -65,7 +102,8 @@ namespace Open93AtHome.Modules
 
             _application.MapPost("/93AtHome/add_cluster", async (context) =>
             {
-                if (!await Utils.CheckPermission(context, true, tokens)) return;
+                context.Response.Headers.Append("Content-Type", "application/json");
+                if (!await Utils.CheckPermission(context, true, Tokens)) return;
                 var dict = await context.GetRequestDictionary() ?? new Dictionary<object, object>();
                 string name = (string)dict["name"];
                 int bandwidth = (int)dict["bandwidth"];
@@ -80,7 +118,8 @@ namespace Open93AtHome.Modules
 
             _application.MapGet("/93AtHome/list_cluster", async (context) =>
             {
-                if (!await Utils.CheckPermission(context, true, tokens)) return;
+                context.Response.Headers.Append("Content-Type", "application/json");
+                if (!await Utils.CheckPermission(context, false, Tokens)) return;
                 ClusterEntity entity = ClusterEntity.CreateClusterEntity();
                 context.Response.StatusCode = 200;
                 await context.Response.WriteAsync(JsonConvert.SerializeObject(this.clusters));
@@ -88,13 +127,14 @@ namespace Open93AtHome.Modules
 
             _application.MapPost("/93AtHome/remove_cluster", async (context) =>
             {
-                if (!await Utils.CheckPermission(context, true, tokens)) return;
+                context.Response.Headers.Append("Content-Type", "application/json");
+                if (!await Utils.CheckPermission(context, true, Tokens)) return;
                 var dict = await context.GetRequestDictionary() ?? new Dictionary<object, object>();
                 string clusterId = (string)dict["clusterId"];
                 ClusterEntity searchParam = new ClusterEntity();
                 searchParam.ClusterId = clusterId;
                 int count = this._db.RemoveEntity<ClusterEntity>(clusterId);
-                this.clusters.RemoveAll(c =>  c.ClusterId == clusterId);
+                this.clusters.RemoveAll(c => c.ClusterId == clusterId);
                 context.Response.StatusCode = 200;
                 await context.Response.WriteAsync(JsonConvert.SerializeObject(new
                 {
@@ -106,6 +146,7 @@ namespace Open93AtHome.Modules
 
             _application.MapGet("/openbmclapi-agent/challenge", async context =>
             {
+                context.Response.Headers.Append("Content-Type", "application/json");
                 context.Request.Query.TryGetValue("clusterId", out StringValues values);
                 string clusterId = values.First() ?? string.Empty;
                 if (this.clusters.Any(c => c.ClusterId == clusterId))
@@ -124,6 +165,7 @@ namespace Open93AtHome.Modules
 
             _application.MapPost("/openbmclapi-agent/token", async context =>
             {
+                context.Response.Headers.Append("Content-Type", "application/json");
                 IDictionary<object, object>? kvp = await context.GetRequestDictionary();
                 string clusterId = (string)kvp!["clusterId"];
                 string signature = (string)kvp!["signature"];
@@ -153,6 +195,7 @@ namespace Open93AtHome.Modules
 
             _application.MapGet("/openbmclapi-agent/configuration", async context =>
             {
+                context.Response.Headers.Append("Content-Type", "application/json");
                 if (!Utils.CheckClusterRequest(context)) return;
                 context.Response.StatusCode = 200;
                 await context.Response.WriteAsJsonAsync(new
@@ -168,7 +211,7 @@ namespace Open93AtHome.Modules
             _application.MapGet("/openbmclapi/download/{hash}", async (HttpContext context, string hash) =>
             {
                 if (!Utils.CheckClusterRequest(context)) return;
-                string? path = this.files.GetByKey1(hash)?.Path;
+                string? path = this.Files.GetByKey1(hash)?.Path;
                 if (path != null)
                 {
                     string realPath = Path.Combine(config.FileDirectory, '.' + path);
@@ -179,13 +222,33 @@ namespace Open93AtHome.Modules
             _application.MapGet("/files/{file}", async (HttpContext context, string file) =>
             {
                 file = file.StartsWith('/') ? '/' + file : file;
-                string realPath = Path.Combine(config.FileDirectory, '.' +  file);
-                await context.Response.SendFileAsync(realPath);
+                file = "/files" + file;
+                if (this.OnlineClusters.Count() == 0)
+                {
+                    string realPath = Path.Combine(config.FileDirectory, '.' + file);
+                    await context.Response.SendFileAsync(realPath);
+                    return;
+                }
+                else
+                {
+                    FileEntity? f = this.Files.GetByKey2(file);
+                    if (f != null)
+                    {
+                        context.Response.StatusCode = 302;
+                        context.Response.Headers.Location = Utils.GetDownloadUrl(this.OnlineClusters.Random(), f);
+                        return;
+                    }
+                }
             });
 
             _application.MapGet("/93AtHome/update_files", async context =>
             {
-                if (!await Utils.CheckPermission(context, false, tokens)) return;
+                if (!await Utils.CheckPermission(context, false, Tokens)) return;
+                if (this.fileUpdateTask?.Status <= TaskStatus.WaitingForChildrenToComplete)
+                {
+                    context.Response.StatusCode = 409;
+                    return;
+                }
                 this.fileUpdateTask = Task.Run(() =>
                 {
                     Process process = new Process()
@@ -200,8 +263,8 @@ namespace Open93AtHome.Modules
                     process.Start();
                     process.WaitForExit(60000);
                     if (process.ExitCode != 0) return;
-                    var files = Utils.ScanFiles(config.FileDirectory);
-                    HashSet<FileEntity> oldFileList = this.files.GetAllValues().ToHashSet();
+                    var files = Utils.ScanFiles(config.FileDirectory).Select(f => $"/files{f}");
+                    HashSet<FileEntity> oldFileList = this.Files.Values.ToHashSet();
                     HashSet<FileEntity> updateFileList = new HashSet<FileEntity>();
                     HashSet<FileEntity> newFiles = new HashSet<FileEntity>();
                     foreach (string file in files)
@@ -226,7 +289,106 @@ namespace Open93AtHome.Modules
                         this._db.AddEntity(file);
                         this.files.Add(file.Hash, file.Path, file);
                     }
+                    this.avroBytes = this.GenerateAvroFileList();
                 });
+            });
+
+            _application.MapGet("/93AtHome/rank", async context =>
+            {
+                context.Response.Headers.Append("Content-Type", "application/json");
+                context.Response.StatusCode = 200;
+                await context.Response.WriteAsJsonAsync(this.clusters);
+            });
+
+            _application.MapGet("/93AtHome/random", context =>
+            {
+                context.Response.StatusCode = 302;
+                context.Response.Headers.Location = Utils.GetDownloadUrl(this.OnlineClusters.Random(), this.Files.Values.Random());
+                return Task.CompletedTask;
+            });
+
+            _application.MapGet("/93AtHome/onlines", async context =>
+            {
+                context.Response.StatusCode = 200;
+                await context.Response.WriteAsync(OnlineClusters.Count().ToString());
+            });
+
+            _application.MapPost("/93AtHome/dashboard/user/login", async context =>
+            {
+                IDictionary<object, object>? body = await context.GetRequestDictionary();
+                string username = (string)body!["username"];
+                string password = (string)body!["password"];
+                UserEntity? current = Users.Where(u => u.UserName == username).FirstOrDefault();
+                if (current != null)
+                {
+                    if (current.CheckPassword(password))
+                    {
+                        context.Response.StatusCode = 200;
+                        await context.Response.WriteAsJsonAsync(new
+                        {
+                            token = JwtHelper.Instance.GenerateToken("93@Home-Center-Server", "user",
+                            [new Claim(JwtRegisteredClaimNames.Email, current.UserEmail)], 60 * 60 * 24 * 3)
+                        });
+                    }
+                    else
+                    {
+                        context.Response.StatusCode = 403;
+                    }
+                }
+                else
+                {
+                    context.Response.StatusCode = 404;
+                }
+            });
+
+            _application.MapPost("/93AtHome/dashboard/user/profile", async context =>
+            {
+                UserEntity? current = await Utils.CheckCookies(context, Users);
+                if (current == null) return;
+                IDictionary<object, object>? body = await context.GetRequestDictionary();
+                body!.TryGetValue("username", out object? un);
+                body!.TryGetValue("oldPassword", out object? op);
+                body!.TryGetValue("newPassword", out object? np);
+                if (un != null && un is string)
+                {
+                    current.UserName = (string)un;
+                }
+                if (op != null && np != null && op is string && np is string)
+                {
+                    if (current.CheckPassword((string)op)) current.SetPassword((string)np);
+                }
+                _db.Update(current);
+            });
+
+            _application.MapPost("/93AtHome/dashboard/user/register", async context =>
+            {
+                IDictionary<object, object>? body = await context.GetRequestDictionary();
+                string email = (string)body!["email"];
+                string username = (string)body!["username"];
+                string password = (string)body!["password"];
+                UserEntity entity = new UserEntity(username, email, password);
+                _db.AddEntity(entity);
+                context.Response.StatusCode = 200;
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    email,
+                    username,
+                    password
+                });
+            });
+
+            _application.MapPost("/93AtHome/dashboard/user/bindCluster", async context =>
+            {
+                UserEntity? user = await Utils.CheckCookies(context, Users);
+                if (user == null) return;
+                context.Response.StatusCode = 204;
+            });
+
+            _application.MapPost("/93AtHome/dashboard/user/unbindCluster", async context =>
+            {
+                UserEntity? user = await Utils.CheckCookies(context, Users);
+                if (user == null) return;
+                context.Response.StatusCode = 204;
             });
         }
 

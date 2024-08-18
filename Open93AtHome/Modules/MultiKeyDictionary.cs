@@ -85,4 +85,7 @@ public class MultiKeyDictionary<TKey1, TKey2, TValue> where TKey1 : notnull wher
     public IEnumerable<TKey1> GetAllKeys1() => this._key1Dictionary.Keys;
     public IEnumerable<TKey2> GetAllKeys2() => this._key2Dictionary.Keys;
     public IEnumerable<TValue> GetAllValues() => this._key1Dictionary.Values;
+    public IEnumerable<TKey1> Keys1 => this.GetAllKeys1();
+    public IEnumerable<TKey2> Keys2 => this.GetAllKeys2();
+    public IEnumerable<TValue> Values => this.GetAllValues();
 }

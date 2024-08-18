@@ -30,7 +30,7 @@ namespace Open93AtHome.Modules.Database
         public IEnumerable<T> GetEntities<T>() where T : new()
         {
             var items = _db.Query<T>($"SELECT * FROM {typeof(T).Name}");
-
+            
             foreach (var item in items)
             {
                 yield return item;
@@ -40,5 +40,6 @@ namespace Open93AtHome.Modules.Database
         public int RemoveEntity<T>(object primaryKey) => this._db.Delete<T>(primaryKey);
 
         public int RemoveAll<T>() => this._db.DeleteAll<T>();
+        public int Update(object? obj) => this._db.Update(obj);
     }
 }

@@ -1,8 +1,10 @@
-﻿using SQLite;
+﻿using Open93AtHome.Modules.Hash;
+using SQLite;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace Open93AtHome.Modules.Database
@@ -10,6 +12,7 @@ namespace Open93AtHome.Modules.Database
     public class ClusterEntity
     {
         [AutoIncrement]
+        [Newtonsoft.Json.JsonIgnore, JsonIgnore]
         [Column("id")]
         public int Id { get; set; }
 
@@ -18,10 +21,14 @@ namespace Open93AtHome.Modules.Database
         public string ClusterId { get; set; } = string.Empty;
 
         [Column("cluster_secret")]
+        [Newtonsoft.Json.JsonIgnore, JsonIgnore]
         public string ClusterSecret { get; set; } = string.Empty;
 
         [Column("endpoint")]
         public string Endpoint { get; set; } = string.Empty;
+
+        [Column("port")]
+        public ushort Port { get; set; } = 80;
 
         [Column("down_reason")]
         public string DownReason { get; set; } = string.Empty;
@@ -33,7 +40,7 @@ namespace Open93AtHome.Modules.Database
         public int Bandwidth { get; set; } = 30;
 
         [Ignore]
-        public int measureBandwidth { get; set; } = -1;
+        public int MeasureBandwidth { get; set; } = -1;
 
         [Ignore]
         public bool IsOnline { get; set; } = false;
@@ -48,7 +55,7 @@ namespace Open93AtHome.Modules.Database
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(Id, ClusterId, ClusterSecret);
+            return CRC32.ComputeChecksum(Encoding.UTF8.GetBytes(ClusterId)).ToInteger();
         }
 
         public override string ToString()
