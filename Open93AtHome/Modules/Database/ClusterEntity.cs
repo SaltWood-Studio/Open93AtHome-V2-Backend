@@ -1,4 +1,5 @@
-﻿using Open93AtHome.Modules.Hash;
+﻿using Newtonsoft.Json;
+using Open93AtHome.Modules.Hash;
 using SQLite;
 using System;
 using System.Collections.Generic;
@@ -13,32 +14,42 @@ namespace Open93AtHome.Modules.Database
     {
         [Indexed, PrimaryKey]
         [Column("cluster_id")]
+        [JsonProperty("cluster_id")]
         public string ClusterId { get; set; } = string.Empty;
 
         [Column("cluster_secret")]
-        [Newtonsoft.Json.JsonIgnore, JsonIgnore]
+        [Newtonsoft.Json.JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
         public string ClusterSecret { get; set; } = string.Empty;
 
         [Column("endpoint")]
+        [JsonProperty("endpoint")]
         public string Endpoint { get; set; } = string.Empty;
 
         [Column("port")]
+        [JsonProperty("port")]
         public ushort Port { get; set; } = 80;
 
         [Column("down_reason")]
         public string DownReason { get; set; } = string.Empty;
 
         [Column("cluster_name")]
+        [JsonProperty("clusterName")]
         public string ClusterName { get; set; } = string.Empty;
 
         [Column("bandwidth")]
         public int Bandwidth { get; set; } = 30;
 
         [Ignore]
+        [JsonProperty("measureBandwidth")]
         public int MeasureBandwidth { get; set; } = -1;
 
         [Ignore]
+        [JsonProperty("isOnline")]
         public bool IsOnline { get; set; } = false;
+
+        [Ignore]
+        [JsonProperty("isBanned")]
+        public bool IsBanned { get; set; } = false;
 
         public static ClusterEntity CreateClusterEntity()
         {
