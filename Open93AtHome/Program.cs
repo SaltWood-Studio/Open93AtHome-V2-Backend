@@ -8,17 +8,15 @@ namespace Open93AtHome
     {
         static void Main(string[] args)
         {
-            const string configPath = "config.yml";
+            const string configPath = "config.json";
 
             Config config;
             if (File.Exists(configPath))
             {
-                Deserializer deserializer = new Deserializer();
-                config = (deserializer.Deserialize(File.ReadAllText(configPath)) as Config) ?? new Config();
+                config = (JsonConvert.DeserializeObject<Config>(File.ReadAllText(configPath))) ?? new Config();
             }
             else config = new Config();
-            Serializer serializer = new Serializer();
-            File.WriteAllText(configPath, serializer.Serialize(config));
+            File.WriteAllText(configPath, JsonConvert.SerializeObject(config));
 
             BackendServer server = new BackendServer(config);
             server.Start();
