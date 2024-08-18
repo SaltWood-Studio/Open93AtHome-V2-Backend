@@ -18,6 +18,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using System.Diagnostics;
 using Open93AtHome.Modules.Avro;
 using System.Security.Claims;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Open93AtHome.Modules
 {
@@ -100,6 +101,15 @@ namespace Open93AtHome.Modules
                     if (cert != null && config.HttpsPort != ushort.MinValue) configure.UseHttps(cert);
                 });
             });
+
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowAll",
+                    builder => builder.AllowAnyOrigin()
+                                      .AllowAnyHeader()
+                                      .AllowAnyMethod());
+            });
+
             this._application = builder.Build();
 
             _application.MapPost("/93AtHome/add_cluster", async (context) =>
@@ -145,6 +155,8 @@ namespace Open93AtHome.Modules
                     clusterId
                 }));
             });
+
+            _application.UseCors("AllowAll");
 
             _application.MapGet("/openbmclapi-agent/challenge", async context =>
             {
