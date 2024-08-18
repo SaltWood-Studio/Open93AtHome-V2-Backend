@@ -16,7 +16,7 @@ namespace Open93AtHome
                 config = (JsonConvert.DeserializeObject<Config>(File.ReadAllText(configPath))) ?? new Config();
             }
             else config = new Config();
-            File.WriteAllText(configPath, JsonConvert.SerializeObject(config));
+            File.WriteAllText(configPath, JsonConvert.SerializeObject(config, Formatting.Indented));
 
             BackendServer server = new BackendServer(config);
             server.Start();

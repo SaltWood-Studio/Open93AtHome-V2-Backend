@@ -21,6 +21,7 @@ using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
 using Open93AtHome.Modules.Statistics;
 using Open93AtHome.Modules.Storage;
+using System.Text.Json;
 
 namespace Open93AtHome.Modules
 {
@@ -36,6 +37,8 @@ namespace Open93AtHome.Modules
         private Config config;
         protected ClusterStatisticsHelper statistics;
         protected DateTime startTime;
+        private long lastHeartbeat;
+        private Task? proxyHeartbeatTask;
 
         private IEnumerable<Token> Tokens => _db.GetEntities<Token>();
         private IEnumerable<ClusterEntity> OnlineClusters => this.clusters.Where(c => c.IsOnline);
@@ -71,6 +74,7 @@ namespace Open93AtHome.Modules
 
         public BackendServer(Config config)
         {
+
             this.config = config;
             this._db = new DatabaseHandler();
             this.startTime = DateTime.Now;
@@ -92,11 +96,8 @@ namespace Open93AtHome.Modules
 
             this.avroBytes = this.GenerateAvroFileList();
 
-            this._io = new SocketIOClient.SocketIO(config.SocketIOAddress);
-            using (Stream file = File.Create(config.SocketIOHandshakeFile))
-            {
-                file.Write(Encoding.UTF8.GetBytes(Utils.RandomHexString(128)));
-            }
+            this._io = null!;
+            this.ReconnectToProxy();
 
             X509Certificate2? cert = LoadAndConvertCert(config.CertificateFile, config.CertificateKeyFile);
             WebApplicationBuilder builder = WebApplication.CreateBuilder();
@@ -437,6 +438,53 @@ namespace Open93AtHome.Modules
                     version = config.Version,
                     uptime = (DateTime.Now - this.startTime).TotalSeconds
                 });
+            });
+        }
+
+        protected async Task ReconnectToProxy()
+        {
+            string handshakeSignature = Utils.RandomHexString(128);
+            this._io = new SocketIOClient.SocketIO(config.SocketIOAddress);
+
+            await this._io.ConnectAsync();
+
+            this._io.On("proxy-keep-alive", ack =>
+            {
+                this.lastHeartbeat = DateTimeOffset.Now.ToUnixTimeSeconds();
+                if (ack.GetValue<JsonElement>(0).GetString() != "I am the proxy server.") Console.WriteLine("Incorrect proxy heartbeat message.");
+            });
+
+            using (Stream file = File.Create(config.SocketIOHandshakeFile))
+            {
+                file.Write(Encoding.UTF8.GetBytes(handshakeSignature));
+                file.Close();
+            }
+
+            await this._io.EmitAsync("center-inject", (ack) =>
+            {
+                this.lastHeartbeat = DateTimeOffset.Now.ToUnixTimeSeconds();
+                this.proxyHeartbeatTask = Task.Run(() =>
+                {
+                    while (true)
+                    {
+                        if (DateTimeOffset.Now.ToUnixTimeSeconds() - lastHeartbeat > 60 * 5)
+                        {
+                            this.proxyHeartbeatTask = null;
+                            try
+                            {
+                                this._io.DisconnectAsync().Wait();
+                            }
+                            catch { }
+                            this.ReconnectToProxy().Wait();
+                            return;
+                        }
+                        Thread.Sleep(1000 * 60);
+                    }
+                });
+            },
+            new
+            {
+                handshake = handshakeSignature
             });
         }
 
