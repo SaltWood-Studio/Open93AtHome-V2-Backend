@@ -241,7 +241,7 @@ namespace Open93AtHome.Modules
                 }
             });
 
-            _application.MapGet("/files/{file}", async (HttpContext context, string file) =>
+            _application.MapGet("/files/{*file}", async (HttpContext context, string file) =>
             {
                 file = file.StartsWith('/') ? file : ('/' + file);
                 file = "/files" + file;
