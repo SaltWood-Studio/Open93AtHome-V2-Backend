@@ -236,7 +236,7 @@ namespace Open93AtHome.Modules
                 string? path = this.Files.GetByKey1(hash)?.Path;
                 if (path != null)
                 {
-                    string realPath = Path.Combine(config.FileDirectory, path.Substring(6));
+                    string realPath = Path.Combine(config.FileDirectory, path.Substring(7));
                     await context.Response.SendFileAsync(realPath);
                 }
             });
@@ -247,7 +247,7 @@ namespace Open93AtHome.Modules
                 file = "/files" + file;
                 if (this.OnlineClusters.Count() == 0)
                 {
-                    string realPath = Path.Combine(config.FileDirectory, file.Substring(6));
+                    string realPath = Path.Combine(config.FileDirectory, file.Substring(7));
                     await context.Response.SendFileAsync(realPath);
                     return;
                 }
@@ -291,7 +291,7 @@ namespace Open93AtHome.Modules
                     HashSet<FileEntity> newFiles = new HashSet<FileEntity>();
                     foreach (string file in files)
                     {
-                        string realPath = Path.Combine(config.FileDirectory, file.Substring(6));
+                        string realPath = Path.Combine(config.FileDirectory, file.Substring(7));
                         FileInfo info = new FileInfo(realPath);
                         using Stream stream = File.OpenRead(realPath);
                         FileEntity entity = new FileEntity(stream, info, file);
