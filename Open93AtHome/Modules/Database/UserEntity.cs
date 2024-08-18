@@ -23,9 +23,6 @@ namespace Open93AtHome.Modules.Database
 
         public void SetPassword(string password) => Password = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(password))).ToLower();
 
-        [AutoIncrement, Column("id")]
-        public int Id { get; set; }
-
         [Indexed]
         [Column("username")]
         public string UserName { get; set; } = string.Empty;

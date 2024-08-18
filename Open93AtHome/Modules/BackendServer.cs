@@ -29,7 +29,7 @@ namespace Open93AtHome.Modules
         protected List<ClusterEntity> clusters;
         private MultiKeyDictionary<string, string, FileEntity> files;
         private Task? fileUpdateTask;
-        private byte[] avroBytes;
+        private byte[] avroBytes = Array.Empty<byte>();
 
         private IEnumerable<Token> Tokens => _db.GetEntities<Token>();
         private IEnumerable<ClusterEntity> OnlineClusters => this.clusters.Where(c => c.IsOnline);

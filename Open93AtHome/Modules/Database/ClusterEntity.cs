@@ -11,11 +11,6 @@ namespace Open93AtHome.Modules.Database
 {
     public class ClusterEntity
     {
-        [AutoIncrement]
-        [Newtonsoft.Json.JsonIgnore, JsonIgnore]
-        [Column("id")]
-        public int Id { get; set; }
-
         [Indexed, PrimaryKey]
         [Column("cluster_id")]
         public string ClusterId { get; set; } = string.Empty;
@@ -60,7 +55,7 @@ namespace Open93AtHome.Modules.Database
 
         public override string ToString()
         {
-            return $"<{this.GetType().FullName} instance index={this.Id} id={this.ClusterId} secret={this.ClusterSecret} code={this.GetHashCode()}>";
+            return $"<{this.GetType().FullName} instance id={this.ClusterId} secret={this.ClusterSecret} code={this.GetHashCode()}>";
         }
     }
 }
