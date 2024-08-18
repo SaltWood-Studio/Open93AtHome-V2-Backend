@@ -30,6 +30,7 @@ namespace Open93AtHome.Modules
         private MultiKeyDictionary<string, string, FileEntity> files;
         private Task? fileUpdateTask;
         private byte[] avroBytes = Array.Empty<byte>();
+        private Config config;
 
         private IEnumerable<Token> Tokens => _db.GetEntities<Token>();
         private IEnumerable<ClusterEntity> OnlineClusters => this.clusters.Where(c => c.IsOnline);
@@ -65,6 +66,7 @@ namespace Open93AtHome.Modules
 
         public BackendServer(Config config)
         {
+            this.config = config;
             this._db = new DatabaseHandler();
 
             this._db.CreateTable<Token>();
