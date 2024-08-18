@@ -10,7 +10,7 @@ namespace Open93AtHome.Modules.Request
 {
     public class Token
     {
-        const int MaxTokenLength = 512;
+        const int MaxTokenLength = 256;
 
         [Indexed]
         [Column("bytes")]
