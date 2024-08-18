@@ -19,6 +19,8 @@ using System.Diagnostics;
 using Open93AtHome.Modules.Avro;
 using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
+using Open93AtHome.Modules.Statistics;
+using Open93AtHome.Modules.Storage;
 
 namespace Open93AtHome.Modules
 {
@@ -32,6 +34,8 @@ namespace Open93AtHome.Modules
         private Task? fileUpdateTask;
         private byte[] avroBytes = Array.Empty<byte>();
         private Config config;
+        protected ClusterStatisticsHelper statistics;
+        protected DateTime startTime;
 
         private IEnumerable<Token> Tokens => _db.GetEntities<Token>();
         private IEnumerable<ClusterEntity> OnlineClusters => this.clusters.Where(c => c.IsOnline);
@@ -69,6 +73,7 @@ namespace Open93AtHome.Modules
         {
             this.config = config;
             this._db = new DatabaseHandler();
+            this.startTime = DateTime.Now;
 
             this._db.CreateTable<Token>();
             this._db.CreateTable<ClusterEntity>();
@@ -77,6 +82,8 @@ namespace Open93AtHome.Modules
 
             this.clusters = this._db.GetEntities<ClusterEntity>().ToList();
             this.files = new MultiKeyDictionary<string, string, FileEntity>();
+            this.statistics = new ClusterStatisticsHelper(this.clusters);
+            this.statistics.Load();
 
             foreach (var file in this._db.GetEntities<FileEntity>())
             {
@@ -403,6 +410,33 @@ namespace Open93AtHome.Modules
                 UserEntity? user = await Utils.CheckCookies(context, Users);
                 if (user == null) return;
                 context.Response.StatusCode = 204;
+            });
+
+            _application.MapPost("/93AtHome/cluster/{id}", (HttpContext context, string id) =>
+            {
+                ClusterEntity? cluster = this.clusters.Where(c => c.ClusterId == id).FirstOrDefault();
+                ClusterStatistics? s = this.statistics.Statistics.Where(s => s.Key == cluster?.ClusterId).FirstOrDefault().Value;
+                if (!(cluster != null && s != null))
+                {
+                    context.Response.StatusCode = 404;
+                    return;
+                }
+                context.Response.WriteAsJsonAsync(new   
+                {
+                    traffic_per_hour = s.GetRawTraffic(),
+                    hits_per_hour = s.GetRawHits(),
+                    cluster
+                }).Wait();
+            });
+
+            _application.MapPost("/93AtHome/onlines", async context => await context.Response.WriteAsync(this.clusters.Where(c => c.IsOnline).Count().ToString()));
+            _application.MapPost("/93AtHome/clusterStatus", async context =>
+            {
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    version = config.Version,
+                    uptime = (DateTime.Now - this.startTime).TotalSeconds
+                });
             });
         }
 

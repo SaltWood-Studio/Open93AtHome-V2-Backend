@@ -14,7 +14,7 @@ namespace Open93AtHome.Modules.Database
     {
         [Indexed, PrimaryKey]
         [Column("cluster_id")]
-        [JsonProperty("cluster_id")]
+        [JsonProperty("clusterId")]
         public string ClusterId { get; set; } = string.Empty;
 
         [Column("cluster_secret")]
@@ -42,6 +42,20 @@ namespace Open93AtHome.Modules.Database
         [Ignore]
         [JsonProperty("measureBandwidth")]
         public int MeasureBandwidth { get; set; } = -1;
+
+        [Column("traffic")]
+        public long Traffic { get; set; } = 0;
+
+        [Ignore]
+        [JsonProperty("pendingTraffic")]
+        public int PendingTraffic { get; set; } = 0;
+
+        [Column("hits")]
+        public long Hits { get; set; } = 0;
+
+        [Ignore]
+        [JsonProperty("pendingHits")]
+        public int PendingHits { get; set; } = 0;
 
         [Ignore]
         [JsonProperty("isOnline")]

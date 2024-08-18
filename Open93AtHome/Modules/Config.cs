@@ -30,6 +30,7 @@ namespace Open93AtHome.Modules
 
         [YamlMember(Description = "文件路径")]
         public string FileDirectory { get; set; }
+        public string Version { get; internal set; }
 
         public Config()
         {
@@ -39,6 +40,7 @@ namespace Open93AtHome.Modules
             this.CertificateKeyFile = "/path/to/cert/key.pem";
             this.FileDirectory = "/path/to/files";
             this.HttpsPort = ushort.MaxValue;
+            this.Version = "2.0.0";
         }
     }
 }
