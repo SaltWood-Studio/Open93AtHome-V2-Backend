@@ -120,6 +120,8 @@ namespace Open93AtHome.Modules
 
             this._application = builder.Build();
 
+            _application.UseCors("AllowAll");
+
             _application.MapPost("/93AtHome/add_cluster", async (context) =>
             {
                 context.Response.Headers.Append("Content-Type", "application/json");
@@ -163,8 +165,6 @@ namespace Open93AtHome.Modules
                     clusterId
                 }));
             });
-
-            _application.UseCors("AllowAll");
 
             _application.MapGet("/openbmclapi-agent/challenge", async context =>
             {
@@ -236,7 +236,7 @@ namespace Open93AtHome.Modules
                 string? path = this.Files.GetByKey1(hash)?.Path;
                 if (path != null)
                 {
-                    string realPath = Path.Combine(config.FileDirectory, '.' + path);
+                    string realPath = Path.Combine(config.FileDirectory, path.Substring(1));
                     await context.Response.SendFileAsync(realPath);
                 }
             });
@@ -247,7 +247,7 @@ namespace Open93AtHome.Modules
                 file = "/files" + file;
                 if (this.OnlineClusters.Count() == 0)
                 {
-                    string realPath = Path.Combine(config.FileDirectory, '.' + file);
+                    string realPath = Path.Combine(config.FileDirectory, file.Substring(1));
                     await context.Response.SendFileAsync(realPath);
                     return;
                 }
@@ -291,7 +291,7 @@ namespace Open93AtHome.Modules
                     HashSet<FileEntity> newFiles = new HashSet<FileEntity>();
                     foreach (string file in files)
                     {
-                        string realPath = Path.Combine(config.FileDirectory, '.' + file);
+                        string realPath = Path.Combine(config.FileDirectory, file.Substring(1));
                         FileInfo info = new FileInfo(realPath);
                         using Stream stream = File.OpenRead(realPath);
                         FileEntity entity = new FileEntity(stream, info, file);
