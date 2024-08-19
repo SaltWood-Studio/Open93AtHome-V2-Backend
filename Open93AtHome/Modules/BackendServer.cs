@@ -357,21 +357,28 @@ namespace Open93AtHome.Modules
             {
                 string code = context.Request.Query["code"].FirstOrDefault() ?? string.Empty;
 
-                HttpClient http = new HttpClient();
-                http.DefaultRequestHeaders.Add("Accept", "application/json");
-                var response = await http.PostAsJsonAsync($"https://github.com/login/oauth/access_token", new
+                HttpClient http = this.client;
+                HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token")
                 {
-                    code,
-                    client_id = config.GitHubOAuthClientId,
-                    client_secret = config.GitHubOAuthClientSecret
-                });
+                    Content = JsonContent.Create(new
+                    {
+                        code,
+                        client_id = config.GitHubOAuthClientId,
+                        client_secret = config.GitHubOAuthClientSecret
+                    })
+                };
+                requestMessage.Headers.Add("Accept", "application/json");
+                var response = await http.SendAsync(requestMessage);
                 response.EnsureSuccessStatusCode();
+
                 IDictionary<string, string> token = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>() ?? new();
                 string accessToken = token["access_token"];
-                http.DefaultRequestHeaders.Add("Authorization", $"token {accessToken}");
 
-                HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
-                GitHubUser user = await (await http.SendAsync(requestMessage)).Content.ReadFromJsonAsync<GitHubUser>() ?? new GitHubUser();
+                requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
+                requestMessage.Headers.Add("Authorization", $"token {accessToken}");
+                requestMessage.Headers.Add("Accept", "application/json");
+                response = await http.SendAsync(requestMessage);
+                GitHubUser user = await response.Content.ReadFromJsonAsync<GitHubUser>() ?? new GitHubUser();
                 _db.AddEntity<UserEntity>(user);
 
 
