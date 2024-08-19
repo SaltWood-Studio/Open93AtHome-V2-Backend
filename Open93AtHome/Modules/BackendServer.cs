@@ -125,7 +125,9 @@ namespace Open93AtHome.Modules
 
             this._application = builder.Build();
 
-            _application.UseCors("AllowAll");
+            this._application.UseRouting();
+            this._application.UseMiddleware<LoggingMiddleware>();
+            // _application.UseCors("AllowAll");
 
             _application.MapPost("/93AtHome/add_cluster", async (context) =>
             {
@@ -597,12 +599,6 @@ namespace Open93AtHome.Modules
             }
             cert = new X509Certificate2(pfxCert);
             return cert;
-        }
-
-        public static void LogAccess(HttpContext context)
-        {
-            context.Request.Headers.TryGetValue("user-agent", out StringValues value);
-            Console.WriteLine($"{context.Request.Method} {context.Request.Path.Value} {context.Request.Protocol} <{context.Response.StatusCode}> - [{context.Connection.RemoteIpAddress}] {value.FirstOrDefault()}");
         }
 
         public void Start() => _application.Run();
