@@ -22,9 +22,16 @@ namespace Open93AtHome.Modules.Database
 
         public void AddEntity<T>(T instance) => _db.Insert(instance);
 
-        public T GetEntity<T>(T instance) where T : new() // 避免插进去拔不出来
+        public T? GetEntity<T>(T instance) where T : class, new() // 避免插进去拔不出来
         {
-            return _db.Get<T>(instance);
+            try
+            {
+                return _db.Get<T>(instance);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public IEnumerable<T> GetEntities<T>() where T : new()
