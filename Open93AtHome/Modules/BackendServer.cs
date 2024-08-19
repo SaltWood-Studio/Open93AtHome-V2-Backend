@@ -29,6 +29,8 @@ namespace Open93AtHome.Modules
 {
     public class BackendServer
     {
+        public static DatabaseHandler? DatabaseHandler { get; set; }
+
         protected DatabaseHandler _db;
         protected SocketIOClient.SocketIO _io;
         protected WebApplication _application;
@@ -82,6 +84,7 @@ namespace Open93AtHome.Modules
 
             this.config = config;
             this._db = new DatabaseHandler();
+            DatabaseHandler = _db;
             this.startTime = DateTime.Now;
 
             this._db.CreateTable<Token>();

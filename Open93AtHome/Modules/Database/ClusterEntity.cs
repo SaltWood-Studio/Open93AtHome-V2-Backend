@@ -69,6 +69,10 @@ namespace Open93AtHome.Modules.Database
         [JsonProperty("isBanned")]
         public bool IsBanned { get; set; } = false;
 
+        [Ignore]
+        [JsonProperty("ownerName")]
+        public string OwnerName => BackendServer.DatabaseHandler.GetEntity<UserEntity>(this.Owner)?.UserName ?? string.Empty;
+
         public static ClusterEntity CreateClusterEntity()
         {
             ClusterEntity clusterEntity = new ClusterEntity();
