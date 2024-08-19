@@ -14,6 +14,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace Open93AtHome
 {
@@ -266,19 +267,30 @@ namespace Open93AtHome
 
         public static async Task<IDictionary<object, object>?> GetRequestDictionary(this HttpContext context)
         {
-            switch (context.Request.Headers.ContentType.FirstOrDefault() ?? string.Empty)
+            string contentType = context.Request.Headers.ContentType.FirstOrDefault() ?? string.Empty;
+
+            try
             {
-                case "application/x-www-form-urlencoded":
+                if (contentType.Contains("application/x-www-form-urlencoded"))
+                {
                     Dictionary<object, object> kvp = new();
                     foreach (var i in await context.Request.ReadFormAsync())
                     {
                         kvp[i.Key] = i.Value.First() ?? string.Empty;
                     }
                     return kvp;
-                case "application/json":
-                    return await context.Request.ReadFromJsonAsync<Dictionary<object, object>>();
-                default:
-                    return null;
+                }
+                else if (contentType.Contains("application/json"))
+                {
+                    using var sr = new StreamReader(context.Request.Body);
+                    var json = await sr.ReadToEndAsync();
+                    return JsonConvert.DeserializeObject<Dictionary<object, object>>(json);
+                }
+                return null;
+            }
+            catch
+            {
+                return null;
             }
         }
 

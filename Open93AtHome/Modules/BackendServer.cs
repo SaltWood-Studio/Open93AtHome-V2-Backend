@@ -114,7 +114,8 @@ namespace Open93AtHome.Modules
                 options.ListenAnyIP(config.HttpsPort, configure =>
                 {
                     configure.Protocols = HttpProtocols.Http1AndHttp2AndHttp3;
-                    if (cert != null && config.HttpsPort != ushort.MinValue) configure.UseHttps(cert);
+                    //if (cert != null && config.HttpsPort != ushort.MinValue) configure.UseHttps(cert);
+                    configure.UseHttps();
                 });
             });
 
