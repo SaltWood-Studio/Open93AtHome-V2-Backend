@@ -18,6 +18,13 @@ namespace Open93AtHome
             else config = new Config();
             File.WriteAllText(configPath, JsonConvert.SerializeObject(config, Formatting.Indented));
 
+            const string keyPath = "key.rsa";
+            if (File.Exists(keyPath))
+            {
+                JwtHelper.Instance.RsaKey.ImportPkcs8PrivateKey(File.ReadAllBytes(keyPath), out int bytesRead);
+            }
+            File.WriteAllBytes(keyPath, JwtHelper.Instance.RsaKey.ExportPkcs8PrivateKey());
+
             BackendServer server = new BackendServer(config);
             server.Start();
         }
