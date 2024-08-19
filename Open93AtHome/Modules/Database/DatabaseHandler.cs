@@ -18,6 +18,11 @@ namespace Open93AtHome.Modules.Database
             _db = new SQLiteConnection("./database.sqlite");
         }
 
+        public DatabaseHandler(string database)
+        {
+            _db = new SQLiteConnection(database);
+        }
+
         public void CreateTable<T>() => _db.CreateTable<T>();
 
         public void AddEntity<T>(T instance) => _db.Insert(instance);

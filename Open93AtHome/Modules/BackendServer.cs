@@ -554,6 +554,18 @@ namespace Open93AtHome.Modules
                 if (ack.GetValue<JsonElement>(0).GetString() != "I am the proxy server.") Console.WriteLine("Incorrect proxy heartbeat message.");
             });
 
+            this._io.On("cluster-connect", ack =>
+            {
+                this.lastHeartbeat = DateTimeOffset.Now.ToUnixTimeSeconds();
+                if (ack.GetValue<JsonElement>(0).GetString() != "I am the proxy server.") Console.WriteLine("Incorrect proxy heartbeat message.");
+            });
+
+            this._io.On("enable", ack =>
+            {
+                this.lastHeartbeat = DateTimeOffset.Now.ToUnixTimeSeconds();
+                if (ack.GetValue<JsonElement>(0).GetString() != "I am the proxy server.") Console.WriteLine("Incorrect proxy heartbeat message.");
+            });
+
             using (Stream file = File.Create(config.SocketIOHandshakeFile))
             {
                 file.Write(Encoding.UTF8.GetBytes(handshakeSignature));

@@ -268,7 +268,13 @@ namespace Open93AtHome
         {
             try
             {
-                return (await context.Request.ReadFormAsync()) as Dictionary<object, object>;
+                IEnumerable<KeyValuePair<string, StringValues>> enumerable = await context.Request.ReadFormAsync();
+                Dictionary<object, object> kvp = new();
+                foreach (var i in enumerable)
+                {
+                    kvp[i.Key] = i.Value.First() ?? string.Empty;
+                }
+                return kvp;
             }
             catch
             {
