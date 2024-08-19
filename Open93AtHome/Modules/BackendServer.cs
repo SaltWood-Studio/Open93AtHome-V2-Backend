@@ -390,10 +390,10 @@ namespace Open93AtHome.Modules
                     requestMessage.Headers.Add("Authorization", $"token {accessToken}");
                     requestMessage.Headers.Add("Accept", "application/json");
                     response = await http.SendAsync(requestMessage);
-                    GitHubUser user = await response.Content.ReadFromJsonAsync<GitHubUser>() ?? new GitHubUser();
+                    GitHubUser user = JsonConvert.DeserializeObject<GitHubUser>(await response.Content.ReadAsStringAsync()) ?? new GitHubUser();
                     try
                     {
-                        if (_db.GetEntity<UserEntity>(user) != null) _db.Update(user);
+                        if (_db.GetEntity<UserEntity>(user.Id) != null) _db.Update(user);
                         else _db.AddEntity<UserEntity>(user);
                     }
                     catch { }
