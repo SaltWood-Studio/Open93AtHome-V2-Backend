@@ -255,6 +255,12 @@ namespace Open93AtHome.Modules
 
             _application.MapGet("/files/{*file}", async (HttpContext context, string file) =>
             {
+                if (file.StartsWith("..") || file.Contains("/../") || file.EndsWith("/.."))
+                {
+                    context.Response.StatusCode = 418;
+                    await context.Response.WriteAsync("想啥呢孩子.png");
+                    return;
+                }
                 file = file.StartsWith('/') ? file : ('/' + file);
                 file = "/files" + file;
                 if (this.OnlineClusters.Count() == 0)
@@ -355,49 +361,60 @@ namespace Open93AtHome.Modules
 
             _application.MapGet("/93AtHome/dashboard/user/oauth", async context =>
             {
-                string code = context.Request.Query["code"].FirstOrDefault() ?? string.Empty;
-
-                HttpClient http = this.client;
-                HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token")
+                try
                 {
-                    Content = JsonContent.Create(new
+                    string code = context.Request.Query["code"].FirstOrDefault() ?? string.Empty;
+
+                    HttpClient http = this.client;
+                    HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token")
                     {
-                        code,
-                        client_id = config.GitHubOAuthClientId,
-                        client_secret = config.GitHubOAuthClientSecret
-                    })
-                };
-                requestMessage.Headers.Add("Accept", "application/json");
-                var response = await http.SendAsync(requestMessage);
-                response.EnsureSuccessStatusCode();
+                        Content = JsonContent.Create(new
+                        {
+                            code,
+                            client_id = config.GitHubOAuthClientId,
+                            client_secret = config.GitHubOAuthClientSecret
+                        })
+                    };
+                    requestMessage.Headers.Add("Accept", "application/json");
+                    var response = await http.SendAsync(requestMessage);
+                    response.EnsureSuccessStatusCode();
 
-                IDictionary<string, string> token = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>() ?? new();
-                string accessToken = token["access_token"];
+                    IDictionary<string, string> token = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>() ?? new();
+                    string accessToken = token["access_token"];
 
-                requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
-                requestMessage.Headers.Add("Authorization", $"token {accessToken}");
-                requestMessage.Headers.Add("Accept", "application/json");
-                response = await http.SendAsync(requestMessage);
-                GitHubUser user = await response.Content.ReadFromJsonAsync<GitHubUser>() ?? new GitHubUser();
-                _db.AddEntity<UserEntity>(user);
+                    requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
+                    requestMessage.Headers.Add("Authorization", $"token {accessToken}");
+                    requestMessage.Headers.Add("Accept", "application/json");
+                    response = await http.SendAsync(requestMessage);
+                    GitHubUser user = await response.Content.ReadFromJsonAsync<GitHubUser>() ?? new GitHubUser();
+                    _db.AddEntity<UserEntity>(user);
 
 
-                context.Response.Cookies.Append("token",
-                    JwtHelper.Instance.GenerateToken("93@Home-Center-Server", "user",
-                    [
-                        new Claim(JwtRegisteredClaimNames.NameId, user.Id.ToString())
-                    ], 60 * 60 * 24), new CookieOptions
+                    context.Response.Cookies.Append("token",
+                        JwtHelper.Instance.GenerateToken("93@Home-Center-Server", "user",
+                        [
+                            new Claim(JwtRegisteredClaimNames.NameId, user.Id.ToString())
+                        ], 60 * 60 * 24), new CookieOptions
+                        {
+                            Expires = DateTime.UtcNow.AddDays(1),
+                            Secure = true
+                        });
+
+                    await context.Response.WriteAsJsonAsync(new
                     {
-                        Expires = DateTime.UtcNow.AddDays(1),
-                        Secure = true
+                        avatar_url = user.AvatarUrl,
+                        username = user.Login,
+                        id = user.Id
                     });
-
-                await context.Response.WriteAsJsonAsync(new
+                }
+                catch (Exception ex)
                 {
-                    avatar_url = user.AvatarUrl,
-                    username = user.Login,
-                    id = user.Id
-                });
+                    context.Response.StatusCode = 500;
+                    await context.Response.WriteAsJsonAsync(new
+                    {
+                        error = $"{ex.GetType().FullName}: {ex.Message}"
+                    });
+                }
             });
 
             _application.MapGet("/93AtHome/dashboard/user/profile", async context =>
