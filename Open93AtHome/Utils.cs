@@ -266,26 +266,19 @@ namespace Open93AtHome
 
         public static async Task<IDictionary<object, object>?> GetRequestDictionary(this HttpContext context)
         {
-            try
+            switch (context.Request.Headers.ContentType.FirstOrDefault() ?? string.Empty)
             {
-                IEnumerable<KeyValuePair<string, StringValues>> enumerable = await context.Request.ReadFormAsync();
-                Dictionary<object, object> kvp = new();
-                foreach (var i in enumerable)
-                {
-                    kvp[i.Key] = i.Value.First() ?? string.Empty;
-                }
-                return kvp;
-            }
-            catch
-            {
-                try
-                {
+                case "application/x-www-form-urlencoded":
+                    Dictionary<object, object> kvp = new();
+                    foreach (var i in await context.Request.ReadFormAsync())
+                    {
+                        kvp[i.Key] = i.Value.First() ?? string.Empty;
+                    }
+                    return kvp;
+                case "application/json":
                     return await context.Request.ReadFromJsonAsync<Dictionary<object, object>>();
-                }
-                catch
-                {
+                default:
                     return null;
-                }
             }
         }
 
