@@ -44,6 +44,7 @@ namespace Open93AtHome.Modules
         private long lastHeartbeat;
         private Task? proxyHeartbeatTask;
         private HttpClient client;
+        private Dictionary<string, string> sessionToClusterId;
 
         private IEnumerable<Token> Tokens => _db.GetEntities<Token>();
         private IEnumerable<ClusterEntity> OnlineClusters => this.clusters.Where(c => c.IsOnline);
@@ -79,6 +80,8 @@ namespace Open93AtHome.Modules
 
         public BackendServer(Config config)
         {
+            this.sessionToClusterId = new();
+
             this.client = new HttpClient();
             client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "93@Home-Center/2.0.0");
 
@@ -558,14 +561,21 @@ namespace Open93AtHome.Modules
 
             this._io.On("cluster-connect", ack =>
             {
-                this.lastHeartbeat = DateTimeOffset.Now.ToUnixTimeSeconds();
-                if (ack.GetValue<JsonElement>(0).GetString() != "I am the proxy server.") Console.WriteLine("Incorrect proxy heartbeat message.");
+                ack.GetValue<JsonElement>(0).TryGetProperty("token", out JsonElement t);
+                string sessionId = ack.GetValue<string>(1);
+                string token = t.GetString() ?? string.Empty;
+                string? clusterId = JwtHelper.Instance.ValidateToken(token, "93@Home-Center-Server", "cluster")?
+                .Claims.Where(claim => claim.Type == "clusterId").FirstOrDefault()?.Value;
+                if (clusterId != null) this.sessionToClusterId[sessionId] = clusterId;
+                else this._io.EmitAsync("center-disconnect-cluster", new
+                {
+                    sessionId
+                }).Wait();
             });
 
             this._io.On("enable", ack =>
             {
-                this.lastHeartbeat = DateTimeOffset.Now.ToUnixTimeSeconds();
-                if (ack.GetValue<JsonElement>(0).GetString() != "I am the proxy server.") Console.WriteLine("Incorrect proxy heartbeat message.");
+
             });
 
             using (Stream file = File.Create(config.SocketIOHandshakeFile))
