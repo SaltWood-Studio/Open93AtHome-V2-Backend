@@ -107,7 +107,7 @@ namespace Open93AtHome
         public static async ValueTask<UserEntity?> CheckCookies(HttpContext context, IEnumerable<UserEntity> users)
         {
             string requestToken = context.Request.Cookies["token"] ?? "";
-            string? userId = JwtHelper.Instance.ValidateToken(requestToken, "93@Home-Cemter-Server", "user")?
+            string? userId = JwtHelper.Instance.ValidateToken(requestToken, "93@Home-Center-Server", "user")?
                 .Claims.Where(claim => claim.ValueType == JwtRegisteredClaimNames.NameId).FirstOrDefault()?.Value;
             int.TryParse(userId, out int id);
             UserEntity? user = users.Where(u => u.Id == id).FirstOrDefault();
