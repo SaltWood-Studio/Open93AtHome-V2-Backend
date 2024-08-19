@@ -71,7 +71,7 @@ namespace Open93AtHome.Modules.Database
 
         [Ignore]
         [JsonProperty("ownerName")]
-        public string OwnerName => BackendServer.DatabaseHandler.GetEntity<UserEntity>(this.Owner)?.UserName ?? string.Empty;
+        public string OwnerName => BackendServer.DatabaseHandler?.GetEntity<UserEntity>(this.Owner)?.UserName ?? string.Empty;
 
         public static ClusterEntity CreateClusterEntity()
         {
