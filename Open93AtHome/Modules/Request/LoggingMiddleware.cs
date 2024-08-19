@@ -32,7 +32,8 @@ public class LoggingMiddleware
         lock (_lock)
         {
             context.Request.Headers.TryGetValue("user-agent", out StringValues value);
-            Console.WriteLine($"{context.Request.Method} {context.Request.Path.Value} {context.Request.Protocol} <{context.Response.StatusCode}> - [{context.Connection.RemoteIpAddress}] {value.FirstOrDefault()}");
+            context.Request.Headers.TryGetValue("x-real-ip", out StringValues ip);
+            Console.WriteLine($"{context.Request.Method} {context.Request.Path.Value} {context.Request.Protocol} <{context.Response.StatusCode}> - [{(ip.FirstOrDefault() ==  null ? context.Connection.RemoteIpAddress : ip.First())}] {value.FirstOrDefault()}");
         }
     }
 }
