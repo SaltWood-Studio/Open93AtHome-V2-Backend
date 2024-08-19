@@ -331,13 +331,14 @@ namespace Open93AtHome.Modules
                     }
                     this.avroBytes = this.GenerateAvroFileList();
                 });
+                context.Response.StatusCode = 204;
             });
 
             _application.MapGet("/93AtHome/rank", async context =>
             {
                 context.Response.Headers.Append("Content-Type", "application/json");
                 context.Response.StatusCode = 200;
-                await context.Response.WriteAsJsonAsync(this.clusters);
+                await context.Response.WriteAsync(JsonConvert.SerializeObject(this.clusters));
             });
 
             _application.MapGet("/93AtHome/random", context =>
@@ -361,6 +362,7 @@ namespace Open93AtHome.Modules
 
             _application.MapGet("/93AtHome/dashboard/user/oauth", async context =>
             {
+                context.Response.Headers.Append("Content-Type", "application/json");
                 try
                 {
                     string code = context.Request.Query["code"].FirstOrDefault() ?? string.Empty;
@@ -422,7 +424,8 @@ namespace Open93AtHome.Modules
             {
                 UserEntity? current = await Utils.CheckCookies(context, Users);
                 if (current == null) return;
-                await context.Response.WriteAsJsonAsync(current);
+                context.Response.Headers.Append("Content-Type", "application/json");
+                await context.Response.WriteAsync(JsonConvert.SerializeObject(current));
             });
 
             _application.MapPost("/93AtHome/dashboard/user/bindCluster", async context =>
@@ -488,7 +491,7 @@ namespace Open93AtHome.Modules
                     return;
                 }
                 context.Response.StatusCode = 200;
-                await context.Response.WriteAsJsonAsync<GitHubUser>(user);
+                await context.Response.WriteAsync(JsonConvert.SerializeObject((GitHubUser)user));
             });
 
             _application.MapPost("/93AtHome/user/clusters", async (HttpContext context) =>
@@ -502,7 +505,7 @@ namespace Open93AtHome.Modules
                 context.Response.Headers.Append("Content-Type", "application/json");
                 IEnumerable<ClusterEntity> clusters = _db.GetEntities<ClusterEntity>().Where(c => c.Owner == user.Id);
                 context.Response.StatusCode = 200;
-                await context.Response.WriteAsJsonAsync(clusters);
+                await context.Response.WriteAsync(JsonConvert.SerializeObject(clusters));
             });
 
             _application.MapPost("/93AtHome/cluster/{id}", (HttpContext context, string id) =>
@@ -514,12 +517,12 @@ namespace Open93AtHome.Modules
                     context.Response.StatusCode = 404;
                     return;
                 }
-                context.Response.WriteAsJsonAsync(new   
+                context.Response.WriteAsync(JsonConvert.SerializeObject(new   
                 {
                     traffic_per_hour = s.GetRawTraffic(),
                     hits_per_hour = s.GetRawHits(),
                     cluster
-                }).Wait();
+                })).Wait();
             });
 
             _application.MapPost("/93AtHome/onlines", async context => await context.Response.WriteAsync(this.clusters.Where(c => c.IsOnline).Count().ToString()));

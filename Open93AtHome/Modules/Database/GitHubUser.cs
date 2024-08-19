@@ -12,13 +12,13 @@ namespace Open93AtHome.Modules.Database
     {
         public GitHubUser() { }
 
-        [JsonPropertyName("login")]
+        [JsonProperty("login")]
         public string Login { get; set; } = string.Empty;
 
-        [JsonPropertyName("id")]
+        [JsonProperty("id")]
         public int Id { get; set; }
 
-        [JsonPropertyName("avatar_url")]
+        [JsonProperty("avatar_url")]
         public string AvatarUrl { get; set; } = string.Empty;
 
         public static implicit operator UserEntity(GitHubUser user)

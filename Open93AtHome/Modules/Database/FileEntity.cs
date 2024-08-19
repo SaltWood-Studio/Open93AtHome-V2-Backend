@@ -1,4 +1,5 @@
-﻿using Open93AtHome.Modules.Hash;
+﻿using Newtonsoft.Json;
+using Open93AtHome.Modules.Hash;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -12,15 +13,19 @@ namespace Open93AtHome.Modules.Database
     public class FileEntity
     {
         [Column("path")]
+        [JsonProperty("path")]
         public string Path { get; set; } = "/path/to/file";
         
         [Column("hash")]
+        [JsonProperty("hash")]
         public string Hash { get; set; } = "0000000000000000000000000000000000000000";
         
         [Column("path")]
+        [JsonProperty("path")]
         public long Size { get; set; } = 0L;
         
         [Column("mtime")]
+        [JsonProperty("mtime")]
         public long LastModified { get; set; } = -1L;
 
         public FileEntity() { }
