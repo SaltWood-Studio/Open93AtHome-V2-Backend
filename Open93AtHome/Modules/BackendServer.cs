@@ -219,7 +219,8 @@ namespace Open93AtHome.Modules
                         context.Response.StatusCode = 200;
                         await context.Response.WriteAsJsonAsync(new
                         {
-                            token = JwtHelper.Instance.GenerateToken("93@Home-Center-Server", "cluster", [new Claim("clusterId", clusterId)], 60 * 60 * 24)
+                            token = JwtHelper.Instance.GenerateToken("93@Home-Center-Server", "cluster", [new Claim("clusterId", clusterId)], 60 * 60 * 24),
+                            ttl = 1000 * 60 * 60 * 24
                         });
                     }
                     else
