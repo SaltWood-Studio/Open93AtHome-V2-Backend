@@ -13,28 +13,18 @@ namespace Open93AtHome.Modules.Database
     {
         public UserEntity() { }
 
-        public UserEntity(string userName, string userEmail, string password)
+        public UserEntity(long id, string username, byte[] photo)
         {
-            if (Utils.IsEmailReachable(userEmail)) throw new InvalidOperationException("邮箱地址不可达，原因是没有查询到MX记录。");
-            UserName = userName;
-            UserEmail = userEmail;
-            Password = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(password))).ToLower();
         }
 
-        public void SetPassword(string password) => Password = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(password))).ToLower();
+        [Column("id")]
+        [PrimaryKey, Indexed]
+        public long Id { get; set; }
 
-        [Indexed]
         [Column("username")]
         public string UserName { get; set; } = string.Empty;
 
-        [Indexed]
-        [Column("email")]
-        public string UserEmail { get; set; } = string.Empty;
-
-        [Indexed]
-        [Column("password")]
-        public string Password { get; set; } = string.Empty;
-
-        public bool CheckPassword(string password) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(password))).ToLower() == password.ToLower();
+        [Column("photo")]
+        public string Photo { get; set; } = string.Empty;
     }
 }

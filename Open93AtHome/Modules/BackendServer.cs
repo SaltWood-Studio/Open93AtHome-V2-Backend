@@ -22,6 +22,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Open93AtHome.Modules.Statistics;
 using Open93AtHome.Modules.Storage;
 using System.Text.Json;
+using System.Net.Http.Json;
+using System.Web;
 
 namespace Open93AtHome.Modules
 {
@@ -39,6 +41,7 @@ namespace Open93AtHome.Modules
         protected DateTime startTime;
         private long lastHeartbeat;
         private Task? proxyHeartbeatTask;
+        private HttpClient client;
 
         private IEnumerable<Token> Tokens => _db.GetEntities<Token>();
         private IEnumerable<ClusterEntity> OnlineClusters => this.clusters.Where(c => c.IsOnline);
@@ -74,6 +77,8 @@ namespace Open93AtHome.Modules
 
         public BackendServer(Config config)
         {
+            this.client = new HttpClient();
+            client.DefaultRequestHeaders.Add("User-Agent", "93@Home-Center");
 
             this.config = config;
             this._db = new DatabaseHandler();
@@ -97,7 +102,7 @@ namespace Open93AtHome.Modules
             this.avroBytes = this.GenerateAvroFileList();
 
             this._io = null!;
-            this.ReconnectToProxy();
+            this.ReconnectToProxy().Wait();
 
             X509Certificate2? cert = LoadAndConvertCert(config.CertificateFile, config.CertificateKeyFile);
             WebApplicationBuilder builder = WebApplication.CreateBuilder();
@@ -145,6 +150,13 @@ namespace Open93AtHome.Modules
                 ClusterEntity entity = ClusterEntity.CreateClusterEntity();
                 context.Response.StatusCode = 200;
                 await context.Response.WriteAsync(JsonConvert.SerializeObject(this.clusters));
+            });
+
+            _application.MapGet("/93AtHome/list_file", async (context) =>
+            {
+                context.Response.Headers.Append("Content-Type", "application/json");
+                context.Response.StatusCode = 200;
+                await context.Response.WriteAsync(JsonConvert.SerializeObject(this.files));
             });
 
             _application.MapPost("/93AtHome/remove_cluster", async (context) =>
@@ -335,82 +347,131 @@ namespace Open93AtHome.Modules
                 await context.Response.WriteAsync(OnlineClusters.Count().ToString());
             });
 
-            _application.MapPost("/93AtHome/dashboard/user/login", async context =>
+            _application.MapPost("/93AtHome/dashboard/user/oauth", async context =>
             {
-                IDictionary<object, object>? body = await context.GetRequestDictionary();
-                string username = (string)body!["username"];
-                string password = (string)body!["password"];
-                UserEntity? current = Users.Where(u => u.UserName == username).FirstOrDefault();
-                if (current != null)
+                string code = context.Request.Query["code"].FirstOrDefault() ?? string.Empty;
+
+                HttpClient http = new HttpClient();
+                http.DefaultRequestHeaders.Add("Accept", "application/json");
+                var response = await http.PostAsJsonAsync($"https://github.com/login/oauth/access_token", new
                 {
-                    if (current.CheckPassword(password))
+                    code,
+                    client_id = config.GitHubOAuthClientId,
+                    client_secret = config.GitHubOAuthClientSecret
+                });
+                response.EnsureSuccessStatusCode();
+                IDictionary<string, string> token = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>() ?? new();
+                string accessToken = token["access_token"];
+                http.DefaultRequestHeaders.Add("Authorization", $"token {accessToken}");
+
+                HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
+                GitHubUser user = await (await http.SendAsync(requestMessage)).Content.ReadFromJsonAsync<GitHubUser>() ?? new GitHubUser();
+                _db.AddEntity<UserEntity>(user);
+
+
+                context.Response.Cookies.Append("token",
+                    JwtHelper.Instance.GenerateToken("93@Home-Center-Server", "user",
+                    [
+                        new Claim(JwtRegisteredClaimNames.NameId, user.Id.ToString())
+                    ], 60 * 60 * 24), new CookieOptions
                     {
-                        context.Response.StatusCode = 200;
-                        await context.Response.WriteAsJsonAsync(new
-                        {
-                            token = JwtHelper.Instance.GenerateToken("93@Home-Center-Server", "user",
-                            [new Claim(JwtRegisteredClaimNames.Email, current.UserEmail)], 60 * 60 * 24 * 3)
-                        });
-                    }
-                    else
-                    {
-                        context.Response.StatusCode = 403;
-                    }
-                }
-                else
+                        Expires = DateTime.UtcNow.AddDays(1),
+                        Secure = true
+                    });
+
+                await context.Response.WriteAsJsonAsync(new
                 {
-                    context.Response.StatusCode = 404;
-                }
+                    avatar_url = user.AvatarUrl,
+                    username = user.Login,
+                    id = user.Id
+                });
             });
 
-            _application.MapPost("/93AtHome/dashboard/user/profile", async context =>
+            _application.MapGet("/93AtHome/dashboard/user/profile", async context =>
             {
                 UserEntity? current = await Utils.CheckCookies(context, Users);
                 if (current == null) return;
-                IDictionary<object, object>? body = await context.GetRequestDictionary();
-                body!.TryGetValue("username", out object? un);
-                body!.TryGetValue("oldPassword", out object? op);
-                body!.TryGetValue("newPassword", out object? np);
-                if (un != null && un is string)
-                {
-                    current.UserName = (string)un;
-                }
-                if (op != null && np != null && op is string && np is string)
-                {
-                    if (current.CheckPassword((string)op)) current.SetPassword((string)np);
-                }
-                _db.Update(current);
-            });
-
-            _application.MapPost("/93AtHome/dashboard/user/register", async context =>
-            {
-                IDictionary<object, object>? body = await context.GetRequestDictionary();
-                string email = (string)body!["email"];
-                string username = (string)body!["username"];
-                string password = (string)body!["password"];
-                UserEntity entity = new UserEntity(username, email, password);
-                _db.AddEntity(entity);
-                context.Response.StatusCode = 200;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    email,
-                    username,
-                    password
-                });
+                await context.Response.WriteAsJsonAsync(current);
             });
 
             _application.MapPost("/93AtHome/dashboard/user/bindCluster", async context =>
             {
                 UserEntity? user = await Utils.CheckCookies(context, Users);
                 if (user == null) return;
-                context.Response.StatusCode = 204;
+                context.Response.Headers.Append("Content-Type", "application/json");
+
+                var body = await context.GetRequestDictionary();
+
+                ClusterEntity? cluster = clusters.Where(c =>
+                c.ClusterId == (string)body!["clusterId"] &&
+                c.ClusterSecret == (string)body!["clusterSecret"]).FirstOrDefault();
+                if (cluster == null)
+                {
+                    context.Response.StatusCode = 404;
+                    return;
+                }
+                if (cluster.Owner != -1)
+                {
+                    context.Response.StatusCode = 409;
+                    return;
+                }
+                cluster.Owner = user.Id;
+                _db.Update(cluster);
+                context.Response.StatusCode = 200;
+                await context.Response.WriteAsync(JsonConvert.SerializeObject(cluster));
             });
 
             _application.MapPost("/93AtHome/dashboard/user/unbindCluster", async context =>
             {
                 UserEntity? user = await Utils.CheckCookies(context, Users);
                 if (user == null) return;
-                context.Response.StatusCode = 204;
+                context.Response.Headers.Append("Content-Type", "application/json");
+
+                var body = await context.GetRequestDictionary();
+
+                ClusterEntity? cluster = clusters.Where(c =>
+                c.ClusterId == (string)body!["clusterId"]).FirstOrDefault();
+                if (cluster == null)
+                {
+                    context.Response.StatusCode = 404;
+                    return;
+                }
+                if (cluster.Owner == -1 || cluster.Owner != user.Id)
+                {
+                    context.Response.StatusCode = 403;
+                    return;
+                }
+                cluster.Owner = -1;
+                _db.Update(cluster);
+                context.Response.StatusCode = 200;
+                await context.Response.WriteAsync(JsonConvert.SerializeObject(cluster));
+            });
+
+            _application.MapPost("/93AtHome/user/{id}", async (HttpContext context, int id) =>
+            {
+                UserEntity? user = _db.GetEntities<UserEntity>().Where(c => c.Id == id).FirstOrDefault();
+                context.Response.Headers.Append("Content-Type", "application/json");
+                if (user == null)
+                {
+                    context.Response.StatusCode = 404;
+                    return;
+                }
+                context.Response.StatusCode = 200;
+                await context.Response.WriteAsJsonAsync<GitHubUser>(user);
+            });
+
+            _application.MapPost("/93AtHome/user/clusters", async (HttpContext context) =>
+            {
+                UserEntity? user = await Utils.CheckCookies(context, Users);
+                if (user == null)
+                {
+                    context.Response.StatusCode = 403;
+                    return;
+                }
+                context.Response.Headers.Append("Content-Type", "application/json");
+                IEnumerable<ClusterEntity> clusters = _db.GetEntities<ClusterEntity>().Where(c => c.Owner == user.Id);
+                context.Response.StatusCode = 200;
+                await context.Response.WriteAsJsonAsync(clusters);
             });
 
             _application.MapPost("/93AtHome/cluster/{id}", (HttpContext context, string id) =>

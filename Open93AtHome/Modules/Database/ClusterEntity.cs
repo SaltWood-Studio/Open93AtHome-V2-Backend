@@ -29,6 +29,10 @@ namespace Open93AtHome.Modules.Database
         [JsonProperty("port")]
         public ushort Port { get; set; } = 80;
 
+        [Column("owner")]
+        [JsonProperty("owner")]
+        public long Owner { get; set; } = 80;
+
         [Column("down_reason")]
         public string DownReason { get; set; } = string.Empty;
 

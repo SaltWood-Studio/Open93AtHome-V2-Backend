@@ -31,6 +31,8 @@ namespace Open93AtHome.Modules
         [YamlMember(Description = "文件路径")]
         public string FileDirectory { get; set; }
         public string Version { get; internal set; }
+        public string GitHubOAuthClientId { get; internal set; }
+        public string GitHubOAuthClientSecret { get; internal set; }
 
         public Config()
         {
@@ -41,6 +43,8 @@ namespace Open93AtHome.Modules
             this.FileDirectory = "/path/to/files";
             this.HttpsPort = ushort.MaxValue;
             this.Version = "2.0.0";
+            this.GitHubOAuthClientId = string.Empty;
+            this.GitHubOAuthClientSecret = string.Empty;
         }
     }
 }
