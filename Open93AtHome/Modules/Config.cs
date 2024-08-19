@@ -31,8 +31,8 @@ namespace Open93AtHome.Modules
         [YamlMember(Description = "文件路径")]
         public string FileDirectory { get; set; }
         public string Version { get; internal set; }
-        public string GitHubOAuthClientId { get; internal set; }
-        public string GitHubOAuthClientSecret { get; internal set; }
+        public string GitHubOAuthClientId { get; set; }
+        public string GitHubOAuthClientSecret { get; set; }
 
         public Config()
         {
