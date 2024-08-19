@@ -427,7 +427,7 @@ namespace Open93AtHome.Modules
                 UserEntity? current = await Utils.CheckCookies(context, Users);
                 if (current == null) return;
                 context.Response.Headers.Append("Content-Type", "application/json");
-                await context.Response.WriteAsync(JsonConvert.SerializeObject(current));
+                await context.Response.WriteAsync(JsonConvert.SerializeObject((GitHubUser)current));
             });
 
             _application.MapPost("/93AtHome/dashboard/user/bindCluster", async context =>
