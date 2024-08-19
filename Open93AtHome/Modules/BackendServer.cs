@@ -190,7 +190,7 @@ namespace Open93AtHome.Modules
                     context.Response.StatusCode = 200;
                     await context.Response.WriteAsJsonAsync(new
                     {
-                        challenge = JwtHelper.Instance.GenerateToken(clusterId, "93@Home-Center-Server", "cluster-challenge", 60 * 5)
+                        challenge = JwtHelper.Instance.GenerateToken("93@Home-Center-Server", "cluster-challenge", [new Claim("clusterId", clusterId)], 60 * 5)
                     });
                 }
                 else
@@ -209,13 +209,13 @@ namespace Open93AtHome.Modules
                 if (this.clusters.Any(c => c.ClusterId == clusterId))
                 {
                     var claims = JwtHelper.Instance.ValidateToken(challenge, "93@Home-Center-Server", "cluster-challenge")?.Claims;
-                    if (claims != null && claims.Any(claim => claim.Type == JwtRegisteredClaimNames.UniqueName &&
+                    if (claims != null && claims.Any(claim => claim.Type == "clusterId" &&
                         claim.Value == clusterId))
                     {
                         context.Response.StatusCode = 200;
                         await context.Response.WriteAsJsonAsync(new
                         {
-                            token = JwtHelper.Instance.GenerateToken(clusterId, "93@Home-Center-Server", "cluster-challenge", 60 * 60 * 24)
+                            token = JwtHelper.Instance.GenerateToken("93@Home-Center-Server", "cluster", [new Claim("clusterId", clusterId)], 60 * 60 * 24)
                         });
                     }
                     else
@@ -398,7 +398,7 @@ namespace Open93AtHome.Modules
                     context.Response.Cookies.Append("token",
                         JwtHelper.Instance.GenerateToken("93@Home-Center-Server", "user",
                         [
-                            new Claim(JwtRegisteredClaimNames.NameId, user.Id.ToString())
+                            new Claim("github_id", user.Id.ToString())
                         ], 60 * 60 * 24), new CookieOptions
                         {
                             Expires = DateTime.UtcNow.AddDays(1),

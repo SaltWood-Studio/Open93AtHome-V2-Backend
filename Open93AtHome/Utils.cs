@@ -108,7 +108,7 @@ namespace Open93AtHome
         {
             string requestToken = context.Request.Cookies["token"] ?? "";
             string? userId = JwtHelper.Instance.ValidateToken(requestToken, "93@Home-Center-Server", "user")?
-                .Claims.Where(claim => claim.ValueType == JwtRegisteredClaimNames.NameId).FirstOrDefault()?.Value;
+                .Claims.Where(claim => claim.Type == "github_id").FirstOrDefault()?.Value;
             int.TryParse(userId, out int id);
             UserEntity? user = users.Where(u => u.Id == id).FirstOrDefault();
             if (user == null)
