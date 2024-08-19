@@ -391,12 +391,8 @@ namespace Open93AtHome.Modules
                     requestMessage.Headers.Add("Accept", "application/json");
                     response = await http.SendAsync(requestMessage);
                     GitHubUser user = JsonConvert.DeserializeObject<GitHubUser>(await response.Content.ReadAsStringAsync()) ?? new GitHubUser();
-                    try
-                    {
-                        if (_db.GetEntity<UserEntity>(user.Id) != null) _db.Update(user);
-                        else _db.AddEntity<UserEntity>(user);
-                    }
-                    catch { }
+                    if (_db.GetEntity<UserEntity>(user.Id) != null) _db.Update(user);
+                    else _db.AddEntity<UserEntity>(user);
 
 
                     context.Response.Cookies.Append("token",
@@ -523,7 +519,7 @@ namespace Open93AtHome.Modules
                     context.Response.StatusCode = 404;
                     return;
                 }
-                context.Response.WriteAsync(JsonConvert.SerializeObject(new   
+                context.Response.WriteAsync(JsonConvert.SerializeObject(new
                 {
                     traffic_per_hour = s.GetRawTraffic(),
                     hits_per_hour = s.GetRawHits(),
