@@ -47,6 +47,7 @@ namespace Open93AtHome.Modules.Database
         public int RemoveEntity<T>(object primaryKey) => this._db.Delete<T>(primaryKey);
 
         public int RemoveAll<T>() => this._db.DeleteAll<T>();
-        public int Update(object? obj) => this._db.Update(obj);
+        public int Update<T>(object obj) => this._db.Update((T)obj);
+        public int Update(object obj) => this._db.Update(obj);
     }
 }
