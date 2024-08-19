@@ -78,7 +78,7 @@ namespace Open93AtHome.Modules
         public BackendServer(Config config)
         {
             this.client = new HttpClient();
-            client.DefaultRequestHeaders.Add("User-Agent", "93@Home-Center");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "93@Home-Center/2.0.0");
 
             this.config = config;
             this._db = new DatabaseHandler();
