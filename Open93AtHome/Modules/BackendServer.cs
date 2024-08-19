@@ -391,8 +391,12 @@ namespace Open93AtHome.Modules
                     requestMessage.Headers.Add("Accept", "application/json");
                     response = await http.SendAsync(requestMessage);
                     GitHubUser user = await response.Content.ReadFromJsonAsync<GitHubUser>() ?? new GitHubUser();
-                    if (_db.GetEntity<UserEntity>(user) != null) _db.Update(user);
-                    else _db.AddEntity<UserEntity>(user);
+                    try
+                    {
+                        if (_db.GetEntity<UserEntity>(user) != null) _db.Update(user);
+                        else _db.AddEntity<UserEntity>(user);
+                    }
+                    catch { }
 
 
                     context.Response.Cookies.Append("token",
