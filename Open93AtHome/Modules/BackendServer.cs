@@ -347,7 +347,13 @@ namespace Open93AtHome.Modules
                 await context.Response.WriteAsync(OnlineClusters.Count().ToString());
             });
 
-            _application.MapPost("/93AtHome/dashboard/user/oauth", async context =>
+            _application.MapGet("/93AtHome/dashboard/oauth_id", async context =>
+            {
+                context.Response.StatusCode = 200;
+                await context.Response.WriteAsync(config.GitHubOAuthClientId);
+            });
+
+            _application.MapGet("/93AtHome/dashboard/user/oauth", async context =>
             {
                 string code = context.Request.Query["code"].FirstOrDefault() ?? string.Empty;
 

@@ -19,7 +19,7 @@ namespace Open93AtHome.Modules.Database
 
         [Column("id")]
         [PrimaryKey, Indexed]
-        public long Id { get; set; }
+        public int Id { get; set; }
 
         [Column("username")]
         public string UserName { get; set; } = string.Empty;

@@ -16,7 +16,7 @@ namespace Open93AtHome.Modules.Database
         public string Login { get; set; } = string.Empty;
 
         [JsonPropertyName("id")]
-        public long Id { get; set; }
+        public int Id { get; set; }
 
         [JsonPropertyName("avatar_url")]
         public string AvatarUrl { get; set; } = string.Empty;
