@@ -89,7 +89,6 @@ namespace Open93AtHome.Modules
 
         public BackendServer(Config config)
         {
-            this.handshakeSign = GenerateSignature();
 
             this.sessionToClusterId = new();
 
@@ -97,6 +96,7 @@ namespace Open93AtHome.Modules
             client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "93@Home-Center/2.0.0");
 
             this.config = config;
+            this.handshakeSign = GenerateSignature();
             this._db = new DatabaseHandler();
             DatabaseHandler = _db;
             this.startTime = DateTime.Now;
@@ -127,8 +127,7 @@ namespace Open93AtHome.Modules
                 options.ListenAnyIP(config.HttpsPort, configure =>
                 {
                     configure.Protocols = HttpProtocols.Http1AndHttp2AndHttp3;
-                    //if (cert != null && config.HttpsPort != ushort.MinValue) configure.UseHttps(cert);
-                    configure.UseHttps();
+                    if (cert != null && config.HttpsPort != ushort.MinValue) configure.UseHttps(cert);
                 });
                 options.ListenLocalhost(65012);
             });
