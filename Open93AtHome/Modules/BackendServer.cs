@@ -645,7 +645,7 @@ namespace Open93AtHome.Modules
 
         protected string GenerateSignature()
         {
-            string handshakeSignature = Utils.RandomHexString(128);
+            string handshakeSignature = Utils.RandomHexString(8);
             using (Stream file = File.Create(config.SocketIOHandshakeFile))
             {
                 file.Write(Encoding.UTF8.GetBytes(handshakeSignature));
