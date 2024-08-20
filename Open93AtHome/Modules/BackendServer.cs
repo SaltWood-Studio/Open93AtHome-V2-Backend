@@ -24,6 +24,7 @@ using Open93AtHome.Modules.Storage;
 using System.Text.Json;
 using System.Net.Http.Json;
 using System.Web;
+using System.Security.Cryptography;
 
 namespace Open93AtHome.Modules
 {
@@ -32,22 +33,30 @@ namespace Open93AtHome.Modules
         public static DatabaseHandler? DatabaseHandler { get; set; }
 
         protected DatabaseHandler _db;
-        protected SocketIOClient.SocketIO _io;
         protected WebApplication _application;
-        protected List<ClusterEntity> clusters;
+        private List<ClusterEntity> clusters;
         private MultiKeyDictionary<string, string, FileEntity> files;
         private Task? fileUpdateTask;
         private byte[] avroBytes = Array.Empty<byte>();
         private Config config;
         protected ClusterStatisticsHelper statistics;
         protected DateTime startTime;
-        private long lastHeartbeat;
-        private Task? proxyHeartbeatTask;
         private HttpClient client;
         private Dictionary<string, string> sessionToClusterId;
+        protected string handshakeSign;
+
+        protected IEnumerable<ClusterEntity> Clusters =>  _db.GetEntities<ClusterEntity>().Join(this.clusters, c => c, c => c, (c1, c2) =>
+        {
+            ClusterEntity entity = new ClusterEntity(c1, c2);
+            if (clusters.Find(c => c.ClusterId == entity.ClusterId) == null)
+            {
+                this.clusters.Add(entity);
+            }
+            return entity;
+        });
 
         private IEnumerable<Token> Tokens => _db.GetEntities<Token>();
-        private IEnumerable<ClusterEntity> OnlineClusters => this.clusters.Where(c => c.IsOnline);
+        private IEnumerable<ClusterEntity> OnlineClusters => this.Clusters.Where(c => c.IsOnline);
         private IEnumerable<UserEntity> Users => this._db.GetEntities<UserEntity>();
 
         protected MultiKeyDictionary<string, string, FileEntity> Files
@@ -80,6 +89,8 @@ namespace Open93AtHome.Modules
 
         public BackendServer(Config config)
         {
+            this.handshakeSign = GenerateSignature();
+
             this.sessionToClusterId = new();
 
             this.client = new HttpClient();
@@ -97,7 +108,7 @@ namespace Open93AtHome.Modules
 
             this.clusters = this._db.GetEntities<ClusterEntity>().ToList();
             this.files = new MultiKeyDictionary<string, string, FileEntity>();
-            this.statistics = new ClusterStatisticsHelper(this.clusters);
+            this.statistics = new ClusterStatisticsHelper(this.Clusters);
             this.statistics.Load();
 
             foreach (var file in this._db.GetEntities<FileEntity>())
@@ -107,8 +118,7 @@ namespace Open93AtHome.Modules
 
             this.avroBytes = this.GenerateAvroFileList();
 
-            this._io = null!;
-            this.ReconnectToProxy().Wait();
+            this.GenerateSignature();
 
             X509Certificate2? cert = LoadAndConvertCert(config.CertificateFile, config.CertificateKeyFile);
             WebApplicationBuilder builder = WebApplication.CreateBuilder();
@@ -120,6 +130,7 @@ namespace Open93AtHome.Modules
                     //if (cert != null && config.HttpsPort != ushort.MinValue) configure.UseHttps(cert);
                     configure.UseHttps();
                 });
+                options.ListenLocalhost(65012);
             });
 
             builder.Services.AddCors(options =>
@@ -158,7 +169,7 @@ namespace Open93AtHome.Modules
                 if (!await Utils.CheckPermission(context, false, Tokens)) return;
                 ClusterEntity entity = ClusterEntity.CreateClusterEntity();
                 context.Response.StatusCode = 200;
-                await context.Response.WriteAsync(JsonConvert.SerializeObject(this.clusters));
+                await context.Response.WriteAsync(JsonConvert.SerializeObject(this.Clusters));
             });
 
             _application.MapGet("/93AtHome/list_file", async (context) =>
@@ -192,7 +203,7 @@ namespace Open93AtHome.Modules
                 context.Response.Headers.Append("Content-Type", "application/json");
                 context.Request.Query.TryGetValue("clusterId", out StringValues values);
                 string clusterId = values.First() ?? string.Empty;
-                if (this.clusters.Any(c => c.ClusterId == clusterId))
+                if (this.Clusters.Any(c => c.ClusterId == clusterId))
                 {
                     context.Response.StatusCode = 200;
                     await context.Response.WriteAsJsonAsync(new
@@ -213,7 +224,7 @@ namespace Open93AtHome.Modules
                 string clusterId = (string)kvp!["clusterId"];
                 string signature = (string)kvp!["signature"];
                 string challenge = (string)kvp!["challenge"];
-                if (this.clusters.Any(c => c.ClusterId == clusterId))
+                if (this.Clusters.Any(c => c.ClusterId == clusterId))
                 {
                     var claims = JwtHelper.Instance.ValidateToken(challenge, "93@Home-Center-Server", "cluster-challenge")?.Claims;
                     if (claims != null && claims.Any(claim => claim.Type == "clusterId" &&
@@ -348,7 +359,7 @@ namespace Open93AtHome.Modules
             {
                 context.Response.Headers.Append("Content-Type", "application/json");
                 context.Response.StatusCode = 200;
-                await context.Response.WriteAsync(JsonConvert.SerializeObject(this.clusters));
+                await context.Response.WriteAsync(JsonConvert.SerializeObject(this.Clusters));
             });
 
             _application.MapGet("/93AtHome/random", context =>
@@ -446,7 +457,7 @@ namespace Open93AtHome.Modules
 
                 var body = await context.GetRequestDictionary();
 
-                ClusterEntity? cluster = clusters.Where(c =>
+                ClusterEntity? cluster = Clusters.Where(c =>
                 c.ClusterId == (string)body!["clusterId"] &&
                 c.ClusterSecret == (string)body!["clusterSecret"]).FirstOrDefault();
                 if (cluster == null)
@@ -473,7 +484,7 @@ namespace Open93AtHome.Modules
 
                 var body = await context.GetRequestDictionary();
 
-                ClusterEntity? cluster = clusters.Where(c =>
+                ClusterEntity? cluster = Clusters.Where(c =>
                 c.ClusterId == (string)body!["clusterId"]).FirstOrDefault();
                 if (cluster == null)
                 {
@@ -489,6 +500,93 @@ namespace Open93AtHome.Modules
                 _db.Update(cluster);
                 context.Response.StatusCode = 200;
                 await context.Response.WriteAsync(JsonConvert.SerializeObject(cluster));
+            });
+
+            _application.MapPost("/93AtHome/socketio/{e}", async (HttpContext context, string e) =>
+            {
+                context.Request.Query.TryGetValue("sign", out StringValues strings);
+                if (!strings.Any(s => s == handshakeSign))
+                {
+                    context.Abort();
+                    return;
+                }
+                SocketIOEvent? socketEvent = JsonConvert.DeserializeObject<SocketIOEvent>(context.Request.Body.ToString() ?? "{}");
+                if (socketEvent == null)
+                {
+                    context.Abort();
+                    return;
+                }
+                ClusterEntity? cluster = this.Clusters.Where(c => c.ClusterId == sessionToClusterId.GetValueOrDefault(socketEvent.SessionId)).FirstOrDefault();
+                switch (e)
+                {
+                    case "enable":
+                        string host = (string)socketEvent.Data.GetValueOrDefault("host")!;
+                        ushort port = (ushort)socketEvent.Data.GetValueOrDefault("port")!;
+                        if (cluster == null)
+                        {
+                            context.Response.StatusCode = 404;
+                            return;
+                        }
+                        HttpClient client = new HttpClient();
+                        for (int i = 0; i < 5; i++)
+                        {
+                            try
+                            {
+                                FileEntity file = this.Files.Values.Random();
+                                HttpResponseMessage response = client.GetAsync($"http://{host}:{port}/download/{file.Hash}?{Utils.GenerateSign(file.Hash, cluster)}").Result;
+                                response.EnsureSuccessStatusCode();
+                                string fileHash = Convert.ToHexString(SHA1.HashData(response.Content.ReadAsStream()));
+                                if (fileHash != file.Hash) throw new Exception("File hash not match.");
+                            }
+                            catch (Exception exception)
+                            {
+                                context.Response.WriteAsJsonAsync<object?[]>([new { message = $"Error: {exception.GetType().FullName}: {exception.Message}" }]).Wait();
+                                return;
+                            }
+                        }
+                        cluster.IsOnline = true;
+                        context.Response.WriteAsJsonAsync<object?[]>([null, true]).Wait();
+                        break;
+                    case "connect":
+                        string? clusterId = JwtHelper.Instance
+                        .ValidateToken(socketEvent.Data.GetValueOrDefault("token")?.ToString()?.Split(' ').LastOrDefault() ?? "",
+                        "93@Home-Center-Server", "cluster")?.Claims.FirstOrDefault(c => c.Type == "clusterId")?.Value;
+                        cluster = this.Clusters.Where(c => c.ClusterId == clusterId).FirstOrDefault();
+                        if (cluster == null)
+                        {
+                            context.Response.StatusCode = 404;
+                            return;
+                        }
+                        sessionToClusterId[cluster.ClusterId] = socketEvent.SessionId;
+                        context.Response.StatusCode = 200;
+                        await context.Response.WriteAsJsonAsync<object?[]>([null]);
+                        break;
+                    case "disable":
+                    case "disconnect":
+                        sessionToClusterId.Remove(socketEvent.SessionId);
+                        if (cluster != null) cluster.IsOnline = false;
+                        await context.Response.WriteAsJsonAsync<object?[]>([null]);
+                        break;
+                    case "keep-alive":
+                        long hits = (long)socketEvent.Data.GetValueOrDefault("hits")!;
+                        long bytes = (long)socketEvent.Data.GetValueOrDefault("bytes")!;
+                        if (cluster == null) return;
+                        if (!cluster.IsOnline)
+                        {
+                            await context.Response.WriteAsJsonAsync<object?[]>([null, false]);
+                            return;
+                        }
+                        cluster.Hits += Math.Min(Math.Abs(hits), cluster.PendingHits);
+                        cluster.Traffic += Math.Min(Math.Abs(bytes), cluster.PendingTraffic);
+                        cluster.PendingHits = 0;
+                        cluster.PendingTraffic = 0;
+                        _db.Update(cluster);
+                        context.Response.StatusCode = 200;
+                        await context.Response.WriteAsJsonAsync<object?[]>([null, true]);
+                        break;
+                    default:
+                        break;
+                }
             });
 
             _application.MapPost("/93AtHome/user/{id}", async (HttpContext context, int id) =>
@@ -520,7 +618,7 @@ namespace Open93AtHome.Modules
 
             _application.MapPost("/93AtHome/cluster/{id}", (HttpContext context, string id) =>
             {
-                ClusterEntity? cluster = this.clusters.Where(c => c.ClusterId == id).FirstOrDefault();
+                ClusterEntity? cluster = this.Clusters.Where(c => c.ClusterId == id).FirstOrDefault();
                 ClusterStatistics? s = this.statistics.Statistics.Where(s => s.Key == cluster?.ClusterId).FirstOrDefault().Value;
                 if (!(cluster != null && s != null))
                 {
@@ -535,7 +633,7 @@ namespace Open93AtHome.Modules
                 })).Wait();
             });
 
-            _application.MapPost("/93AtHome/onlines", async context => await context.Response.WriteAsync(this.clusters.Where(c => c.IsOnline).Count().ToString()));
+            _application.MapPost("/93AtHome/onlines", async context => await context.Response.WriteAsync(this.Clusters.Where(c => c.IsOnline).Count().ToString()));
             _application.MapPost("/93AtHome/clusterStatus", async context =>
             {
                 await context.Response.WriteAsJsonAsync(new
@@ -546,70 +644,15 @@ namespace Open93AtHome.Modules
             });
         }
 
-        protected async Task ReconnectToProxy()
+        protected string GenerateSignature()
         {
             string handshakeSignature = Utils.RandomHexString(128);
-            this._io = new SocketIOClient.SocketIO(config.SocketIOAddress);
-
-            await this._io.ConnectAsync();
-
-            this._io.On("proxy-keep-alive", ack =>
-            {
-                this.lastHeartbeat = DateTimeOffset.Now.ToUnixTimeSeconds();
-                if (ack.GetValue<JsonElement>(0).GetString() != "I am the proxy server.") Console.WriteLine("Incorrect proxy heartbeat message.");
-            });
-
-            this._io.On("cluster-connect", ack =>
-            {
-                ack.GetValue<JsonElement>(0).TryGetProperty("token", out JsonElement t);
-                string sessionId = ack.GetValue<string>(1);
-                string token = t.GetString() ?? string.Empty;
-                string? clusterId = JwtHelper.Instance.ValidateToken(token, "93@Home-Center-Server", "cluster")?
-                .Claims.Where(claim => claim.Type == "clusterId").FirstOrDefault()?.Value;
-                if (clusterId != null) this.sessionToClusterId[sessionId] = clusterId;
-                else this._io.EmitAsync("center-disconnect-cluster", new
-                {
-                    sessionId
-                }).Wait();
-            });
-
-            this._io.On("enable", ack =>
-            {
-
-            });
-
             using (Stream file = File.Create(config.SocketIOHandshakeFile))
             {
                 file.Write(Encoding.UTF8.GetBytes(handshakeSignature));
                 file.Close();
             }
-
-            await this._io.EmitAsync("center-inject", (ack) =>
-            {
-                this.lastHeartbeat = DateTimeOffset.Now.ToUnixTimeSeconds();
-                this.proxyHeartbeatTask = Task.Run(() =>
-                {
-                    while (true)
-                    {
-                        if (DateTimeOffset.Now.ToUnixTimeSeconds() - lastHeartbeat > 60 * 5)
-                        {
-                            this.proxyHeartbeatTask = null;
-                            try
-                            {
-                                this._io.DisconnectAsync().Wait();
-                            }
-                            catch { }
-                            this.ReconnectToProxy().Wait();
-                            return;
-                        }
-                        Thread.Sleep(1000 * 60);
-                    }
-                });
-            },
-            new
-            {
-                handshake = handshakeSignature
-            });
+            return handshakeSignature;
         }
 
         protected X509Certificate2? LoadAndConvertCert(string? certPath, string? keyPath)

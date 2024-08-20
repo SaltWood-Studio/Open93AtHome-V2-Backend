@@ -12,6 +12,41 @@ namespace Open93AtHome.Modules.Database
 {
     public class ClusterEntity
     {
+        public ClusterEntity() { }
+
+        public ClusterEntity(ClusterEntity? fromDatabase, ClusterEntity? fromLocal)
+        {
+            if (fromDatabase == null && fromLocal != null) SetThisToInstance(this, fromLocal);
+            else if (fromDatabase != null && fromLocal == null) SetThisToInstance(this, fromDatabase);
+            else if (fromDatabase != null && fromLocal != null)
+            {
+                SetThisToInstance(this, fromDatabase);
+                this.MeasureBandwidth = fromLocal.MeasureBandwidth;
+                this.PendingTraffic = fromLocal.PendingTraffic;
+                this.PendingHits = fromLocal.PendingHits;
+                this.IsOnline = fromLocal.IsOnline;
+            }
+        }
+
+        public static void SetThisToInstance(ClusterEntity @this, ClusterEntity instance)
+        {
+            @this.ClusterId = instance.ClusterId;
+            @this.ClusterSecret = instance.ClusterSecret;
+            @this.Endpoint = instance.Endpoint;
+            @this.Port = instance.Port;
+            @this.Owner = instance.Owner;
+            @this.DownReason = instance.DownReason;
+            @this.ClusterName = instance.ClusterName;
+            @this.Bandwidth = instance.Bandwidth;
+            @this.MeasureBandwidth = instance.MeasureBandwidth;
+            @this.Traffic = instance.Traffic;
+            @this.PendingTraffic = instance.PendingTraffic;
+            @this.Hits = instance.Hits;
+            @this.PendingHits = instance.PendingHits;
+            @this.IsOnline = instance.IsOnline;
+            @this.IsBanned = instance.IsBanned;
+        }
+
         [Indexed, PrimaryKey]
         [Column("cluster_id")]
         [JsonProperty("clusterId")]
@@ -65,7 +100,6 @@ namespace Open93AtHome.Modules.Database
         [JsonProperty("isOnline")]
         public bool IsOnline { get; set; } = false;
 
-        [Ignore]
         [JsonProperty("isBanned")]
         public bool IsBanned { get; set; } = false;
 
