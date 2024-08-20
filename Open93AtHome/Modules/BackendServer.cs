@@ -118,8 +118,6 @@ namespace Open93AtHome.Modules
 
             this.avroBytes = this.GenerateAvroFileList();
 
-            this.GenerateSignature();
-
             X509Certificate2? cert = LoadAndConvertCert(config.CertificateFile, config.CertificateKeyFile);
             WebApplicationBuilder builder = WebApplication.CreateBuilder();
             builder.WebHost.UseKestrel(options =>
