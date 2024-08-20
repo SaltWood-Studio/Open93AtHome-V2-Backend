@@ -27,7 +27,7 @@ namespace Open93AtHome
             char[] chars = "0123456789abcdef".ToCharArray();
             foreach (var _ in Enumerable.Range(0, count))
             {
-                sb.Append(random.GetItems(chars, chars.Length));
+                sb.Append(chars.Random());
             }
             return sb.ToString();
         }
